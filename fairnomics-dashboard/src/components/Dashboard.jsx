@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { TrendingUp, Clock, Target, Lock } from 'lucide-react'
+import { TrendingUp, Clock, Target, Lock, Shield, ExternalLink } from 'lucide-react'
 import { useFairnomics } from '../contexts/FairnomicsContext'
 import { formatTokenAmount } from '../utils/formatToken'
 
@@ -8,6 +8,10 @@ const Dashboard = () => {
   
   // Get required periods from config or milestone
   const requiredPeriods = config?.requiredGoodPeriods || currentMilestone?.requiredPeriods || 2
+  
+  // Get vault address from env
+  const vaultAddress = import.meta.env.VITE_VAULT_ADDRESS || '0x...'
+  const fairTokenAddress = import.meta.env.VITE_FAIR_TOKEN_ADDRESS || '0x...'
   
   // Only show loading on initial load (no data yet)
   if (loading && !currentMilestone && milestones.length === 0) {
@@ -27,22 +31,6 @@ const Dashboard = () => {
         <div className="card border-red-500/30 bg-red-500/5 max-w-md">
           <h2 className="text-xl font-bold text-red-400 mb-2">Error Loading Data</h2>
           <p className="text-sm text-gray-400 mb-4">{error}</p>
-          <div className="text-xs text-gray-500 space-y-2">
-            <p><strong>Common Issues:</strong></p>
-            <ul className="list-disc list-inside space-y-1 ml-2">
-              <li>Invalid vault address - verify the contract exists on Base</li>
-              <li>Wrong contract type - ensure it's a FAIRVault contract</li>
-              <li>RPC issues - try a different RPC URL (Alchemy, Infura, etc.)</li>
-              <li>Contract not initialized - vault may need to be initialized first</li>
-            </ul>
-            <p className="mt-3"><strong>Setup:</strong></p>
-            <ol className="list-decimal list-inside space-y-1 ml-2">
-              <li>Check your <code className="bg-gray-800 px-1 rounded">.env</code> file has correct addresses</li>
-              <li>Verify <code className="bg-gray-800 px-1 rounded">VITE_VAULT_ADDRESS</code> is a valid FAIRVault contract</li>
-              <li>Check <code className="bg-gray-800 px-1 rounded">VITE_BASE_RPC_URL</code> is accessible</li>
-              <li>Restart the dev server after changing .env</li>
-            </ol>
-          </div>
         </div>
       </div>
     )
@@ -68,7 +56,7 @@ const Dashboard = () => {
       textColor: 'text-indigo-400',
     },
     {
-      label: 'Good Periods',
+      label: 'Good Hours',
       value: `${stats?.daysAboveTarget || 0}/${requiredPeriods}`,
       icon: Clock,
       color: 'from-blue-500 to-cyan-600',
@@ -87,23 +75,98 @@ const Dashboard = () => {
     },
   ]
 
+  const rules = [
+    {
+      icon: Target,
+      title: '5% Max Unlock',
+      description: 'Maximum 50M FAIR (5% of supply) unlocks at each milestone',
+      color: 'from-indigo-500 to-purple-600',
+      bgColor: 'bg-indigo-500/10',
+      borderColor: 'border-indigo-500/20',
+      textColor: 'text-indigo-400',
+    },
+    {
+      icon: Clock,
+      title: '3 Months Cooldown',
+      description: 'Minimum 3 months between unlock events',
+      color: 'from-purple-500 to-pink-600',
+      bgColor: 'bg-purple-500/10',
+      borderColor: 'border-purple-500/20',
+      textColor: 'text-purple-400',
+    },
+    {
+      icon: TrendingUp,
+      title: '1.5× Price Multiplier',
+      description: 'Each milestone requires price to be 1.5× the previous target',
+      color: 'from-emerald-500 to-green-600',
+      bgColor: 'bg-emerald-500/10',
+      borderColor: 'border-emerald-500/20',
+      textColor: 'text-emerald-400',
+    },
+    {
+      icon: Shield,
+      title: `${requiredPeriods} Period Sustain`,
+      description: `Price must stay above target for ${requiredPeriods} consecutive periods`,
+      color: 'from-blue-500 to-cyan-600',
+      bgColor: 'bg-blue-500/10',
+      borderColor: 'border-blue-500/20',
+      textColor: 'text-blue-400',
+    },
+  ]
+
+  const allocations = [
+    { label: 'Seed Sale', amount: '10%', value: '100M FAIR', color: 'from-indigo-500 to-purple-600' },
+    { label: 'Team Pool', amount: '10%', value: '100M FAIR', color: 'from-purple-500 to-pink-600' },
+    { label: 'Growth / Memetics', amount: '20%', value: '200M FAIR', color: 'from-emerald-500 to-green-600' },
+    { label: 'Community Reserve', amount: '50%', value: '500M FAIR', color: 'from-blue-500 to-cyan-600' },
+    { label: 'LP & Buffer', amount: '10%', value: '100M FAIR', color: 'from-gray-500 to-gray-600' },
+  ]
+
+  const faqs = [
+    {
+      question: "Where's the GitHub?",
+      answer: "GitHub.com/fairnomics"
+    },
+    {
+      question: "What inspired Fairnomics?",
+      answer: "Crypto has long needed a fair tokenomics model that works for communities and long-term builders. This 2025 tweet by CZ inspired us to build FAIR."
+    },
+    {
+      question: "Is FAIR on CoinMarketCap?",
+      answer: "Coming soon!"
+    },
+    {
+      question: "What other projects use Fairnomics?",
+      answer: "$A2A and several more are in development!"
+    }
+  ]
+
   return (
-    <div className="space-y-8">
-      {/* Header */}
+    <div className="space-y-12">
+      {/* Fairnomics Header */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="text-center mb-12"
+        className="text-center mb-8"
       >
-        <h1 className="text-5xl font-bold text-white mb-3">
-          FAIR Token Dashboard
-        </h1>
-        <p className="text-lg text-gray-400">
-          Transparent, rules-based unlock system on Base
+        <h1 className="text-5xl font-bold text-white mb-3">Fairnomics</h1>
+        <p className="text-lg text-gray-400 mb-4">
+          An open source transparent rules-based tokenomics system for long-term builders.
         </p>
+        {vaultAddress && vaultAddress !== '0x...' && (
+          <a
+            href={`https://basescan.org/address/${vaultAddress}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 text-sm text-indigo-400 hover:text-indigo-300 transition-colors"
+          >
+            Base Contract: {vaultAddress.slice(0, 6)}...{vaultAddress.slice(-4)}
+            <ExternalLink size={14} />
+          </a>
+        )}
       </motion.div>
 
-      {/* Stats Grid */}
+      {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((stat, index) => {
           const Icon = stat.icon
@@ -230,6 +293,164 @@ const Dashboard = () => {
             <p className="text-gray-500 text-sm">All milestones completed!</p>
           )}
         </motion.div>
+      </div>
+
+      {/* Unlock Rules */}
+      <div>
+        <h2 className="text-2xl font-bold text-white mb-6">Unlock Rules</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {rules.map((rule, index) => {
+            const Icon = rule.icon
+            return (
+              <motion.div
+                key={rule.title}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.1 }}
+                className={`card border ${rule.borderColor}`}
+              >
+                <div className="flex items-start gap-4">
+                  <div className={`p-3 rounded-lg ${rule.bgColor} flex-shrink-0`}>
+                    <Icon className={rule.textColor} size={24} />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-white mb-2">{rule.title}</h3>
+                    <p className="text-sm text-gray-400 leading-relaxed">{rule.description}</p>
+                  </div>
+                </div>
+              </motion.div>
+            )
+          })}
+        </div>
+        
+        {/* Trustless & Transparent Card */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="card border border-indigo-500/30 bg-indigo-500/5 mt-4"
+        >
+          <div className="flex items-start gap-4">
+            <div className="p-3 rounded-lg bg-indigo-500/20 flex-shrink-0">
+              <Shield className="text-indigo-400" size={24} />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-white mb-2">Trustless & Transparent</h3>
+              <p className="text-sm text-gray-400 leading-relaxed">
+                All unlock conditions are enforced on-chain. No human discretion. 
+                The community wins before insiders do. Every milestone unlock is 
+                automatic and verifiable on Base blockchain.
+              </p>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+
+      {/* Token Allocation */}
+      <div>
+        <h2 className="text-2xl font-bold text-white mb-6">Token Allocation</h2>
+        <div className="card">
+          <div className="space-y-4">
+            {allocations.map((allocation, index) => (
+              <motion.div
+                key={allocation.label}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: index * 0.1 }}
+                className="space-y-2"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-300">{allocation.label}</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-gray-400">{allocation.amount}</span>
+                    <span className="text-sm font-semibold text-white">{allocation.value}</span>
+                  </div>
+                </div>
+                <div className="w-full bg-gray-800 rounded-full h-2 overflow-hidden">
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: allocation.amount }}
+                    transition={{ duration: 0.8, delay: index * 0.1 }}
+                    className={`h-full bg-gradient-to-r ${allocation.color} rounded-full`}
+                  />
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Token Data & FAQ - Side by Side */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Token Data */}
+        <div className="flex flex-col">
+          <h2 className="text-2xl font-bold text-white mb-6">Token Data</h2>
+          <div className="card flex-1">
+            <div className="space-y-4">
+              <div className="flex justify-between items-center pb-3 border-b border-gray-800">
+                <span className="text-gray-400 text-sm">Chain</span>
+                <span className="text-white font-semibold">Base</span>
+              </div>
+              <div className="flex justify-between items-center pb-3 border-b border-gray-800">
+                <span className="text-gray-400 text-sm">Contract</span>
+                {fairTokenAddress && fairTokenAddress !== '0x...' ? (
+                  <a
+                    href={`https://basescan.org/address/${fairTokenAddress}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-indigo-400 hover:text-indigo-300 text-sm font-semibold flex items-center gap-1"
+                  >
+                    {fairTokenAddress.slice(0, 6)}...{fairTokenAddress.slice(-4)}
+                    <ExternalLink size={12} />
+                  </a>
+                ) : (
+                  <span className="text-white font-semibold text-sm">-</span>
+                )}
+              </div>
+              <div className="flex justify-between items-center pb-3 border-b border-gray-800">
+                <span className="text-gray-400 text-sm">DEX</span>
+                <span className="text-white font-semibold">Aerodrome USDC/FAIR</span>
+              </div>
+              <div className="flex justify-between items-center pb-3 border-b border-gray-800">
+                <span className="text-gray-400 text-sm">Market Cap</span>
+                <span className="text-white font-semibold">$1.5M</span>
+              </div>
+              <div className="flex justify-between items-center pb-3 border-b border-gray-800">
+                <span className="text-gray-400 text-sm">FDV</span>
+                <span className="text-white font-semibold">$10.0M</span>
+              </div>
+              <div className="flex justify-between items-center pb-3 border-b border-gray-800">
+                <span className="text-gray-400 text-sm">Circulating Supply</span>
+                <span className="text-white font-semibold">1B FAIR</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400 text-sm">Max Supply</span>
+                <span className="text-white font-semibold">10B FAIR</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* FAQ */}
+        <div className="flex flex-col">
+          <h2 className="text-2xl font-bold text-white mb-6">FAQ</h2>
+          <div className="card flex-1">
+            <div className="space-y-3">
+              {faqs.map((faq, index) => (
+                <motion.div
+                  key={index}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                  className={index < faqs.length - 1 ? "pb-3 border-b border-gray-800" : ""}
+                >
+                  <h3 className="text-sm font-semibold text-white mb-1">Q: {faq.question}</h3>
+                  <p className="text-xs text-gray-400 leading-relaxed">A: {faq.answer}</p>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )

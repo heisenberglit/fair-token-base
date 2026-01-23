@@ -1,11 +1,9 @@
 import { motion } from 'framer-motion'
-import { LayoutDashboard, Activity, Clock, Info } from 'lucide-react'
+import { LayoutDashboard, Clock } from 'lucide-react'
 
 const Navigation = ({ activeSection, setActiveSection }) => {
   const navItems = [
-    { id: 'info', label: 'Fairnomics', icon: Info },
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'status', label: 'Status', icon: Activity },
     { id: 'timeline', label: 'Timeline', icon: Clock },
   ]
 
@@ -18,8 +16,8 @@ const Navigation = ({ activeSection, setActiveSection }) => {
             animate={{ opacity: 1, x: 0 }}
             className="flex items-center gap-3"
           >
-            <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg">
-              <span className="text-xl font-bold text-white">F</span>
+            <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center shadow-lg border-2 border-white">
+              <span className="text-sm font-bold text-white">FAIR</span>
             </div>
             <h1 className="text-2xl font-bold text-white">FAIR Token</h1>
           </motion.div>

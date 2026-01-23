@@ -48,19 +48,6 @@
     @apply bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500;
   }
   
-  @keyframes shimmer {
-    0% {
-      transform: translateX(-100%);
-    }
-    100% {
-      transform: translateX(100%);
-    }
-  }
-  
-  .animate-shimmer {
-    animation: shimmer 2s infinite;
-  }
-  
   .stat-card {
     @apply bg-gradient-to-br from-gray-900/80 to-gray-950/80 border border-gray-800/50 rounded-xl p-6;
     backdrop-filter: blur(20px);
@@ -95,4 +82,17 @@
 
 ::-webkit-scrollbar-thumb:hover {
   background: #3a3a3a;
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s infinite;
 }
