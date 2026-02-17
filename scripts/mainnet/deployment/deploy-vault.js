@@ -145,6 +145,9 @@ async function main() {
   const vaultArtifact = loadArtifact(CONTRACTS.FAIR_VAULT);
   const vaultFactory = new ethers.ContractFactory(vaultArtifact.abi, vaultArtifact.bytecode, wallet);
 
+  // MIN_LIQUIDITY_FLOOR: 0 = disabled (reserved for future use)
+  const MIN_LIQUIDITY_FLOOR = process.env.VAULT_MIN_LIQUIDITY_FLOOR || "0";
+
   const vault = await vaultFactory.deploy(
     EXISTING_FAIR_TOKEN,
     wallet.address,
@@ -155,7 +158,8 @@ async function main() {
     TGE_TIMESTAMP,
     WAIT_RULE,
     REQUIRED_GOOD_PERIODS,
-    PERIOD_INTERVAL
+    PERIOD_INTERVAL,
+    MIN_LIQUIDITY_FLOOR
   );
 
   await vault.waitForDeployment();

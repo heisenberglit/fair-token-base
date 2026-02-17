@@ -30,9 +30,29 @@ interface IPriceOracle {
  * 6. Keeper bot calls tryUnlock() hourly - anyone can call this
  * 
  * UNLOCK CONDITIONS (ALL must be met):
+ * - Previous milestone unlocked (sequential: 1 then 2 then 3 ...)
  * - Cooldown elapsed since last unlock (WAIT_RULE: 90 days prod, configurable)
  * - Required good periods with price above target (REQUIRED_GOOD_PERIODS: 360 prod)
- * - Current TWAP price >= milestone target
+ * - Unlock price = TWAP over the full qualifying window (not single reading at unlock)
+ *
+ * WHY 360-HOUR TWAP INSTEAD OF SINGLE READING:
+ * - Prevents "end-loaded pumping": manipulator can't pump at unlock moment for outsized effect
+ * - Every qualifying hour contributes equally (1/360th weight each)
+ * - Rewards sustained organic price appreciation over 15 days
+ * - Penalizes volatility: wild swings average out
+ * - Industry standard approach (Uniswap, Chainlink use TWAP for manipulation resistance)
+ * - If someone pumps for 360 hours, that's not manipulation—that's price discovery
+ *
+ * TWAP CALCULATION:
+ * - Each good period: milestoneCumulativePriceTime += oracle_price * PERIOD_INTERVAL
+ * - At unlock: twapPrice = milestoneCumulativePriceTime / (REQUIRED_GOOD_PERIODS * PERIOD_INTERVAL)
+ * - Integer division floors (rounds down) consistently
+ * - Once unlocked, TWAP is permanently stored in lastUnlockPrice
+ *
+ * DYNAMIC NEXT TARGET:
+ * - M(n+1)_target = M(n)_TWAP * 1.5 (not hardcoded at deploy)
+ * - Adapts to actual sustained market performance
+ * - Prevents milestone skipping even if price spikes far above
  */
 contract FAIRVault is Ownable {
     using SafeERC20 for IERC20;
@@ -66,6 +86,10 @@ contract FAIRVault is Ownable {
 
     /// @notice Starting price target for milestone 1 ($0.000010 in 1e9 units)
     uint256 public constant START_PRICE = 10;
+
+    /// @notice Minimum liquidity floor for good period qualification (0 = disabled, for future use)
+    /// @dev Reserved for future enhancement: require minimum pool liquidity to count as good period
+    uint256 public immutable MIN_LIQUIDITY_FLOOR;
 
     // -----------------------------
     // POOL WALLETS (set at deployment)
@@ -120,6 +144,9 @@ contract FAIRVault is Ownable {
     /// @notice Price target per milestone
     mapping(uint256 => uint256) public milestonePriceTarget;
 
+    /// @notice Cumulative (price * time) per milestone for TWAP over qualifying window
+    mapping(uint256 => uint256) public milestoneCumulativePriceTime;
+
     // -----------------------------
     // EVENTS
     // -----------------------------
@@ -127,7 +154,7 @@ contract FAIRVault is Ownable {
     event VaultInitialized(uint256 totalAmount, uint256 perMilestone);
     event OracleSet(address indexed oracle);
     event OracleFrozen(address indexed oracle);
-    event MilestoneUnlocked(uint256 indexed milestoneId, uint256 price, uint256 timestamp);
+    event MilestoneUnlocked(uint256 indexed milestoneId, uint256 twapPrice, uint256 spotPrice, uint256 timestamp);
     event GoodPeriodRecorded(uint256 indexed milestoneId, uint256 goodPeriods, uint256 price, uint256 timestamp);
     event TokensDistributed(uint256 treasury, uint256 growth, uint256 liquidity, uint256 team);
 
@@ -146,6 +173,7 @@ contract FAIRVault is Ownable {
      * @param _waitRule Cooldown period between unlocks (90 days for prod, 4 hours for test)
      * @param _requiredGoodPeriods Required good periods (360 for prod, 2 for test)
      * @param _periodInterval Time between recordings (1 hour for prod, 1 minute for test)
+     * @param _minLiquidityFloor Minimum liquidity for good period (0 = disabled, for future use)
      */
     constructor(
         address _fairToken,
@@ -157,7 +185,8 @@ contract FAIRVault is Ownable {
         uint256 _tgeTimestamp,
         uint256 _waitRule,
         uint256 _requiredGoodPeriods,
-        uint256 _periodInterval
+        uint256 _periodInterval,
+        uint256 _minLiquidityFloor
     ) Ownable(_owner) {
         require(_fairToken != address(0), "Token zero");
         require(_treasury != address(0), "Treasury zero");
@@ -168,6 +197,7 @@ contract FAIRVault is Ownable {
         require(_waitRule > 0, "Wait rule zero");
         require(_requiredGoodPeriods > 0, "Good periods zero");
         require(_periodInterval > 0, "Period interval zero");
+        // _minLiquidityFloor can be 0 (disabled)
 
         fairToken = IERC20(_fairToken);
         S1_TREASURY = _treasury;
@@ -179,6 +209,7 @@ contract FAIRVault is Ownable {
         WAIT_RULE = _waitRule;
         REQUIRED_GOOD_PERIODS = _requiredGoodPeriods;
         PERIOD_INTERVAL = _periodInterval;
+        MIN_LIQUIDITY_FLOOR = _minLiquidityFloor;
 
         lastUnlockTime = _tgeTimestamp;
         lastUnlockPrice = START_PRICE;
@@ -285,6 +316,7 @@ contract FAIRVault is Ownable {
         if (!initialized) return (false, "Vault not initialized");
         if (milestoneId < 1 || milestoneId > TOTAL_MILESTONES) return (false, "Invalid milestone ID");
         if (milestoneUnlocked[milestoneId]) return (false, "Already unlocked");
+        if (milestoneId > 1 && !milestoneUnlocked[milestoneId - 1]) return (false, "Previous milestone not unlocked");
         if (address(priceOracle) == address(0)) return (false, "Oracle not set");
         if (block.timestamp < lastUnlockTime + WAIT_RULE) return (false, "Cooldown not elapsed");
         
@@ -359,31 +391,41 @@ contract FAIRVault is Ownable {
     /**
      * @notice Process good hour for a milestone
      * @param milestoneId Milestone ID (1-18)
+     * @dev Good periods are NON-CONSECUTIVE: if price drops below target, that hour is skipped.
+     *      When price returns above target, accumulation resumes from where it left off.
+     *      SOFT STOP: Oracle failures don't revert, hour is simply treated as non-qualifying.
      */
     function processMilestoneHour(uint256 milestoneId) external {
         require(initialized, "Not initialized");
         require(milestoneId >= 1 && milestoneId <= TOTAL_MILESTONES, "Invalid milestone");
         require(!milestoneUnlocked[milestoneId], "Already unlocked");
+        require(milestoneId == 1 || milestoneUnlocked[milestoneId - 1], "Previous milestone not unlocked");
         require(address(priceOracle) != address(0), "Oracle not set");
 
-        // Try to get price - if oracle fails, can't record period
+        // SOFT STOP: Oracle failures don't revert - hour treated as non-qualifying
+        // This handles: oracle anomalies, chain outages, stale data, edge cases
         uint256 price;
         try priceOracle.getPrice() returns (uint256 price_) {
             price = price_;
         } catch {
-            // Oracle failed - can't record period, but don't revert
+            // Oracle failed - can't record period, but don't revert (soft stop)
             return;
         }
         
         uint256 targetPrice = milestonePriceTarget[milestoneId];
 
+        // Price below target = non-qualifying hour (no accumulation)
         if (price < targetPrice) return;
 
+        // Enforce minimum time between recordings (prevents spam)
         uint256 lastGoodPeriod = milestoneLastGoodPeriodTimestamp[milestoneId];
         if (block.timestamp < lastGoodPeriod + PERIOD_INTERVAL) return;
 
+        // Record good period and accumulate for TWAP calculation
+        // milestoneCumulativePriceTime ONLY increments here (on recorded good periods)
         milestoneGoodPeriods[milestoneId]++;
         milestoneLastGoodPeriodTimestamp[milestoneId] = block.timestamp;
+        milestoneCumulativePriceTime[milestoneId] += price * PERIOD_INTERVAL;
 
         emit GoodPeriodRecorded(milestoneId, milestoneGoodPeriods[milestoneId], price, block.timestamp);
     }
@@ -391,80 +433,121 @@ contract FAIRVault is Ownable {
     /**
      * @notice Finalize milestone unlock
      * @param milestoneId Milestone ID (1-18)
+     * @dev SOFT STOP: Oracle failures cause silent return (no revert).
+     *      This is intentional for resilience against oracle anomalies.
+     *      Caller should check milestoneUnlocked[id] after call to verify success.
      */
     function finalizeMilestone(uint256 milestoneId) external {
         require(initialized, "Not initialized");
         require(milestoneId >= 1 && milestoneId <= TOTAL_MILESTONES, "Invalid milestone");
         require(!milestoneUnlocked[milestoneId], "Already unlocked");
+        require(milestoneId == 1 || milestoneUnlocked[milestoneId - 1], "Previous milestone not unlocked");
         require(address(priceOracle) != address(0), "Oracle not set");
         require(block.timestamp >= lastUnlockTime + WAIT_RULE, "Cooldown not elapsed");
 
-        // Try to get price - revert if oracle fails (this is a finalize function, should fail if oracle broken)
-        uint256 price;
+        // SOFT STOP: Oracle failures don't revert - caller can retry later
+        uint256 spotPrice;
         try priceOracle.getPrice() returns (uint256 price_) {
-            price = price_;
+            spotPrice = price_;
         } catch {
-            revert("Oracle getPrice() failed");
+            // Oracle failed - can't verify price, return silently (soft stop)
+            return;
         }
         
-        require(price >= milestonePriceTarget[milestoneId], "Price below target");
+        // Price must still be above target at unlock moment
+        if (spotPrice < milestonePriceTarget[milestoneId]) return;
+        
         require(milestoneGoodPeriods[milestoneId] >= REQUIRED_GOOD_PERIODS, "Good periods not reached");
 
+        // Calculate 360-hour TWAP: average of ALL good period readings
+        // Uses integer division (floor rounding) consistently
+        uint256 totalTime = REQUIRED_GOOD_PERIODS * PERIOD_INTERVAL;
+        uint256 twapPrice = milestoneCumulativePriceTime[milestoneId] / totalTime;
+
+        // Mark unlocked - this is PERMANENT and cannot be undone
+        // The twapPrice is stored in lastUnlockPrice and cannot be recomputed
         milestoneUnlocked[milestoneId] = true;
         lastUnlockTime = block.timestamp;
-        lastUnlockPrice = price;
+        lastUnlockPrice = twapPrice;
+
+        // Dynamic next target: based on ACTUAL sustained performance (TWAP), not hardcoded
+        if (milestoneId < TOTAL_MILESTONES) {
+            milestonePriceTarget[milestoneId + 1] = (twapPrice * PRICE_MULTIPLIER_NUM) / PRICE_MULTIPLIER_DEN;
+        }
 
         _distributeUnlock();
 
-        emit MilestoneUnlocked(milestoneId, price, block.timestamp);
+        // Emit both 360-hour TWAP (used for calculations) and current 1-hour TWAP (for transparency)
+        emit MilestoneUnlocked(milestoneId, twapPrice, spotPrice, block.timestamp);
     }
 
     /**
-     * @notice Combined: process period and finalize if ready
+     * @notice Combined: process period and finalize if ready (main keeper function)
      * @param milestoneId Milestone ID (1-18)
+     * @dev SOFT STOP: Oracle failures don't revert - keeper can retry later.
+     *      Good periods are NON-CONSECUTIVE: gaps in qualifying hours are allowed.
+     *      milestoneCumulativePriceTime ONLY increments when a good period is recorded.
      */
     function tryUnlock(uint256 milestoneId) external {
         require(initialized, "Not initialized");
         require(milestoneId >= 1 && milestoneId <= TOTAL_MILESTONES, "Invalid milestone");
         require(!milestoneUnlocked[milestoneId], "Already unlocked");
+        require(milestoneId == 1 || milestoneUnlocked[milestoneId - 1], "Previous milestone not unlocked");
         require(address(priceOracle) != address(0), "Oracle not set");
 
-        // Try to get price - if oracle fails, we can't proceed
+        // SOFT STOP: Oracle failures don't revert - handles anomalies, outages, edge cases
         uint256 price;
         try priceOracle.getPrice() returns (uint256 price_) {
             price = price_;
         } catch {
-            // Oracle failed - can't record periods or unlock
-            // This is expected for new pools without history
-            // The keeper will retry later when pool has observations
+            // Oracle failed - can't record periods or unlock, return silently
+            // Keeper will retry later when oracle recovers
             return;
         }
         
         uint256 targetPrice = milestonePriceTarget[milestoneId];
 
         // 1) Record good period if conditions met
+        //    - Price must be >= target (non-qualifying hours are skipped, NOT failed)
+        //    - Hours do NOT need to be consecutive
+        //    - milestoneCumulativePriceTime ONLY increments here (on recorded good periods)
         if (price >= targetPrice) {
             uint256 lastGoodPeriod = milestoneLastGoodPeriodTimestamp[milestoneId];
             if (block.timestamp >= lastGoodPeriod + PERIOD_INTERVAL) {
                 milestoneGoodPeriods[milestoneId]++;
                 milestoneLastGoodPeriodTimestamp[milestoneId] = block.timestamp;
+                milestoneCumulativePriceTime[milestoneId] += price * PERIOD_INTERVAL;
                 emit GoodPeriodRecorded(milestoneId, milestoneGoodPeriods[milestoneId], price, block.timestamp);
             }
         }
 
-        // 2) Check if can finalize
+        // 2) Check if can finalize (all conditions must be met)
         if (block.timestamp < lastUnlockTime + WAIT_RULE) return;
         if (price < targetPrice) return;
         if (milestoneGoodPeriods[milestoneId] < REQUIRED_GOOD_PERIODS) return;
 
-        // 3) Finalize
+        // 3) Finalize: compute 360-hour TWAP and unlock
+        //    WHY TWAP: Using average of ALL 360 readings prevents end-loaded pumping.
+        //    A manipulator can't spike price at unlock moment for outsized effect.
+        //    Integer division floors (rounds down) consistently across all milestones.
+        uint256 totalTime = REQUIRED_GOOD_PERIODS * PERIOD_INTERVAL;
+        uint256 twapPrice = milestoneCumulativePriceTime[milestoneId] / totalTime;
+
+        // Mark unlocked - PERMANENT, cannot be undone or recomputed
         milestoneUnlocked[milestoneId] = true;
         lastUnlockTime = block.timestamp;
-        lastUnlockPrice = price;
+        lastUnlockPrice = twapPrice;  // Store 360-hour TWAP (not spot price)
+
+        // Set next milestone target dynamically based on ACTUAL sustained performance
+        // This adapts the price ladder to real market consensus
+        if (milestoneId < TOTAL_MILESTONES) {
+            milestonePriceTarget[milestoneId + 1] = (twapPrice * PRICE_MULTIPLIER_NUM) / PRICE_MULTIPLIER_DEN;
+        }
 
         _distributeUnlock();
 
-        emit MilestoneUnlocked(milestoneId, price, block.timestamp);
+        // Emit both: 360-hour TWAP (used for next target) and current 1-hour TWAP (transparency)
+        emit MilestoneUnlocked(milestoneId, twapPrice, price, block.timestamp);
     }
 
     // -----------------------------

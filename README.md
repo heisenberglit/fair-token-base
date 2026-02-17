@@ -144,4 +144,4 @@ For issues:
 1. Check environment-specific README
 2. Verify contract addresses
 3. Check wallet balances
-4. Contact Ben with transaction hashes
+4. Contact User with transaction hashes

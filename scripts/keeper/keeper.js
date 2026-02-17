@@ -273,7 +273,8 @@ async function runKeeper() {
       if (reason.includes("oracle") || 
           reason.includes("not initialized") || 
           reason.includes("not set") ||
-          reason.includes("invalid milestone")) {
+          reason.includes("invalid milestone") ||
+          reason.includes("previous milestone not unlocked")) {
         log(`  ⚠️  Cannot proceed: ${canUnlock.reason}`);
         log(`  Skipping tryUnlock() - it would revert.\n`);
         shouldSkip = true;

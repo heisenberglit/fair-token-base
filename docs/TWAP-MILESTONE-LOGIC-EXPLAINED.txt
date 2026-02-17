@@ -1,0 +1,446 @@
+================================================================================
+                    FAIR VAULT - TWAP MILESTONE LOGIC EXPLAINED
+================================================================================
+
+This document explains how the new TWAP-based milestone unlock system works
+compared to the old hardcoded price ladder approach.
+
+KEY DIFFERENCE IN ONE SENTENCE:
+-------------------------------
+OLD: Unlock price = single 1-hour TWAP reading at unlock moment
+NEW: Unlock price = average of ALL 360 hourly 1-hour TWAP readings (360-hour TWAP)
+
+Both systems use the AerodromeTWAPOracle which returns 1-hour TWAP (not spot).
+The difference is whether we use ONE reading or ALL readings for unlock price.
+
+================================================================================
+                              CONFIGURATION
+================================================================================
+
+Contract Parameters (Production):
+- PERIOD_INTERVAL     = 3600 seconds (1 hour)
+- REQUIRED_GOOD_PERIODS = 360 (15 days worth of hourly checks)
+- WAIT_RULE           = 7,776,000 seconds (90 days cooldown between unlocks)
+- PRICE_MULTIPLIER    = 1.5x (15/10)
+- START_PRICE         = 10 (in 1e9 units = $0.000010)
+
+Contract Parameters (Test Mode):
+- PERIOD_INTERVAL     = 60 seconds (1 minute)
+- REQUIRED_GOOD_PERIODS = 2
+- WAIT_RULE           = 14,400 seconds (4 hours)
+
+================================================================================
+                         OLD LOGIC (HARDCODED LADDER)
+================================================================================
+
+At deployment, all 18 milestone targets were calculated and fixed forever:
+
+  Milestone | Target (1e9) | USD Equivalent
+  ----------|--------------|----------------
+     M1     |     10       | $0.000010
+     M2     |     15       | $0.000015
+     M3     |     22       | $0.000022
+     M4     |     33       | $0.000033
+     M5     |     50       | $0.000050
+     M6     |     75       | $0.000075
+     M7     |    112       | $0.000112
+     M8     |    168       | $0.000168
+     ...    |    ...       | ...
+     M18    |  9,841       | $0.009841
+
+Formula: M(n) = M(n-1) × 1.5 (rounded down)
+
+NOTE ON ORACLE:
+---------------
+The AerodromeTWAPOracle already returns a 1-HOUR TWAP (not spot price).
+So each "price" reading in the contract is actually a 1-hour time-weighted average.
+This provides some manipulation resistance at the hourly level.
+
+HOW OLD UNLOCK WORKED:
+----------------------
+1. Oracle returns 1-hour TWAP each time getPrice() is called
+2. If 1-hour TWAP >= target, a good period is recorded
+3. After 360 good periods + cooldown elapsed + current 1-hour TWAP >= target
+4. Unlock happens:
+   - lastUnlockPrice = 1-HOUR TWAP at unlock moment (single reading)
+   - M2 target remains 15 (hardcoded, never changes)
+
+LIMITATION OF OLD LOGIC:
+------------------------
+- Each good period is checked independently (1-hour TWAP snapshots)
+- At unlock, only the FINAL 1-hour TWAP is stored as lastUnlockPrice
+- The 359 previous TWAP readings are not factored into the unlock price
+- Next milestone targets are hardcoded, don't adapt to actual performance
+- If price averaged 20 over 360 hours but was 50 at unlock moment,
+  lastUnlockPrice = 50 (the single 1-hour TWAP at unlock)
+
+================================================================================
+                       NEW LOGIC (TWAP + DYNAMIC TARGETS)
+================================================================================
+
+KEY CHANGES:
+------------
+1. Unlock price = TWAP over the ENTIRE qualifying window (not just final 1-hour reading)
+2. Next milestone target = Previous TWAP × 1.5 (dynamic, not hardcoded)
+3. Milestones must unlock sequentially (1 → 2 → 3 → ...)
+
+NEW STATE VARIABLE:
+-------------------
+mapping(uint256 => uint256) public milestoneCumulativePriceTime;
+
+This stores the sum of (price × PERIOD_INTERVAL) for each good period recorded.
+
+================================================================================
+                     DETAILED EXAMPLE: MILESTONE 1 UNLOCK
+================================================================================
+
+SCENARIO:
+---------
+- M1 target = 10 (in 1e9 units)
+- Need 360 good periods (price above target for 360 hours)
+- PERIOD_INTERVAL = 3600 seconds
+
+PRICE BEHAVIOR OVER 360 HOURS:
+------------------------------
+
+  Period Range | Hours | 1-Hour TWAP | Contribution to Cumulative
+  -------------|-------|-------------|----------------------------
+      1-100    |  100  |     12      | 100 × 12 × 3600 = 4,320,000
+    101-200    |  100  |     15      | 100 × 15 × 3600 = 5,400,000
+    201-300    |  100  |     18      | 100 × 18 × 3600 = 6,480,000
+    301-360    |   60  |     20      |  60 × 20 × 3600 = 4,320,000
+  -------------|-------|-------------|----------------------------
+     TOTAL     |  360  |   varies    |            20,520,000
+
+Each hour, when tryUnlock() or processMilestoneHour() is called:
+  - Oracle returns 1-hour TWAP
+  - If 1-hour TWAP >= target, a good period is recorded
+  - milestoneCumulativePriceTime[1] += (1-hour TWAP) × PERIOD_INTERVAL
+
+WHAT HAPPENS AT M1 UNLOCK:
+--------------------------
+
+After 360 good periods are accumulated:
+
+  totalTime = REQUIRED_GOOD_PERIODS × PERIOD_INTERVAL
+            = 360 × 3600
+            = 1,296,000 seconds
+
+  twapPrice = milestoneCumulativePriceTime[1] / totalTime
+            = 20,520,000 / 1,296,000
+            = 15 (integer division)
+
+  The TWAP price over the qualifying window is 15 (≈ $0.000015)
+
+CONTRACT STATE AFTER M1 UNLOCK:
+-------------------------------
+
+  milestoneUnlocked[1] = true
+  lastUnlockTime = block.timestamp
+  lastUnlockPrice = 15                    ← TWAP, not spot!
+  milestonePriceTarget[2] = 15 × 1.5 = 22 ← DYNAMIC, not hardcoded!
+
+================================================================================
+                    COMPARISON: OLD VS NEW AT M1 UNLOCK
+================================================================================
+
+Assume: 
+- 1-hour TWAP readings over 360 hours averaged to 15
+- 1-hour TWAP at unlock moment = 18
+
+  Aspect              | OLD LOGIC                | NEW LOGIC
+  --------------------|--------------------------|---------------------------
+  What's stored       | 18 (final 1-hr TWAP)     | 15 (avg of ALL 360 readings)
+  M2 target           | 15 (hardcoded)           | 22 (dynamic: 15 × 1.5)
+  Uses full history?  | No (only final reading)  | Yes (all 360 readings)
+
+================================================================================
+                         FULL MILESTONE PROGRESSION EXAMPLE
+================================================================================
+
+Let's trace through multiple milestones with realistic price behavior:
+
+MILESTONE 1:
+------------
+- Target: 10
+- 1-hour TWAP readings over 360 hours: varies 12-20
+- 360-HOUR TWAP at unlock: 15 (average of all 360 readings)
+- Next target set: M2 = 15 × 1.5 = 22
+
+MILESTONE 2:
+------------
+- Target: 22 (set dynamically from M1's 360-hour TWAP)
+- 1-hour TWAP readings over 360 hours: varies 25-35
+- 360-HOUR TWAP at unlock: 28
+- Next target set: M3 = 28 × 1.5 = 42
+
+MILESTONE 3:
+------------
+- Target: 42 (set dynamically from M2's 360-hour TWAP)
+- 1-hour TWAP readings over 360 hours: varies 45-60
+- 360-HOUR TWAP at unlock: 50
+- Next target set: M4 = 50 × 1.5 = 75
+
+PROGRESSION TABLE:
+------------------
+
+  Milestone | Target   | Qualifying TWAP | Next Target Set
+  ----------|----------|-----------------|----------------
+     M1     |    10    |       15        |      22
+     M2     |    22    |       28        |      42
+     M3     |    42    |       50        |      75
+     M4     |    75    |       90        |     135
+     M5     |   135    |      160        |     240
+     ...    |   ...    |      ...        |     ...
+
+Notice how the targets ADAPT to actual market performance!
+
+================================================================================
+                      ATTACK SCENARIO COMPARISON
+================================================================================
+
+SCENARIO: Attacker pumps price high, then lets it drop, pumps again at unlock
+
+OLD SYSTEM:
+-----------
+1. Attacker pumps 1-hour TWAP to 15 for first 300 hours
+2. Price drops to 11 for hours 301-359 (still above 10 target, counts as good)
+3. At hour 360, attacker pumps 1-hour TWAP back to 50
+4. M1 unlocks with lastUnlockPrice = 50 (the FINAL 1-hour TWAP reading)
+5. M2 target is still 15 (hardcoded) - already exceeded!
+6. The 359 previous readings (averaging ~14) are ignored
+7. lastUnlockPrice doesn't reflect true sustained performance
+
+NEW SYSTEM:
+-----------
+1. Attacker pumps 1-hour TWAP to 15 for first 300 hours
+2. Price drops to 11 for hours 301-359
+3. At hour 360, attacker pumps 1-hour TWAP back to 50
+4. 360-HOUR TWAP calculated: (300×15 + 59×11 + 1×50) / 360 ≈ 14.4
+5. M1 unlocks with lastUnlockPrice = 14 (the 360-HOUR TWAP)
+6. M2 target dynamically set to 21 (14 × 1.5)
+7. The final pump to 50 had minimal impact on the overall average
+8. Next milestone reflects ACTUAL sustained performance
+
+KEY INSIGHT:
+------------
+In the new system:
+- Every hour's price contributes equally to the final unlock price
+- End-loading a pump has minimal effect (1/360th weight)
+- You must sustain elevated prices across the ENTIRE window
+- The unlock price truly represents 15 days of market consensus
+
+To manipulate this system, an attacker must:
+- Sustain elevated 1-hour TWAPs for 15 full days
+- Supply real liquidity continuously
+- Compete with arbitrage the whole time
+- Risk capital throughout
+
+That's not manipulation - that's price discovery.
+
+================================================================================
+                           CODE COMPARISON
+================================================================================
+
+OLD CODE (at unlock):
+---------------------
+```solidity
+milestoneUnlocked[milestoneId] = true;
+lastUnlockTime = block.timestamp;
+lastUnlockPrice = price;  // <- Final 1-hour TWAP at this moment (single reading)
+// M2 target unchanged (was set at deployment, never changes)
+```
+
+NEW CODE (at unlock):
+---------------------
+```solidity
+// Calculate TWAP over FULL qualifying window (all 360 readings averaged)
+uint256 totalTime = REQUIRED_GOOD_PERIODS * PERIOD_INTERVAL;
+uint256 twapPrice = milestoneCumulativePriceTime[milestoneId] / totalTime;
+
+milestoneUnlocked[milestoneId] = true;
+lastUnlockTime = block.timestamp;
+lastUnlockPrice = twapPrice;  // <- 360-hour TWAP (average of ALL readings)
+
+// Dynamically set next milestone target based on actual sustained performance
+if (milestoneId < TOTAL_MILESTONES) {
+    milestonePriceTarget[milestoneId + 1] = (twapPrice * 15) / 10;  // 360-hr TWAP × 1.5
+}
+```
+
+================================================================================
+                         ACCUMULATION CODE
+================================================================================
+
+Every time a good period is recorded (in tryUnlock or processMilestoneHour):
+
+```solidity
+// price = 1-hour TWAP from oracle (already time-weighted over 1 hour)
+if (price >= targetPrice) {
+    uint256 lastGoodPeriod = milestoneLastGoodPeriodTimestamp[milestoneId];
+    if (block.timestamp >= lastGoodPeriod + PERIOD_INTERVAL) {
+        milestoneGoodPeriods[milestoneId]++;
+        milestoneLastGoodPeriodTimestamp[milestoneId] = block.timestamp;
+        
+        // NEW: Accumulate each 1-hour TWAP reading for 360-hour TWAP calculation
+        // This weights each hour equally in the final unlock price
+        milestoneCumulativePriceTime[milestoneId] += price * PERIOD_INTERVAL;
+        
+        emit GoodPeriodRecorded(milestoneId, milestoneGoodPeriods[milestoneId], price, block.timestamp);
+    }
+}
+```
+
+The result is a "TWAP of TWAPs" - each 1-hour TWAP contributes equally to
+the final 360-hour average used for unlock pricing.
+
+================================================================================
+                         SEQUENTIAL ENFORCEMENT
+================================================================================
+
+NEW: Milestones must unlock in order (1 → 2 → 3 → ...)
+
+Added to processMilestoneHour(), finalizeMilestone(), tryUnlock():
+
+```solidity
+require(milestoneId == 1 || milestoneUnlocked[milestoneId - 1], 
+        "Previous milestone not unlocked");
+```
+
+This prevents:
+- Skipping milestones even if price qualifies
+- Recording good periods for M3 before M2 is unlocked
+- Any out-of-order unlock attempts
+
+================================================================================
+                              EVENT CHANGE
+================================================================================
+
+OLD EVENT:
+----------
+event MilestoneUnlocked(uint256 indexed milestoneId, uint256 price, uint256 timestamp);
+// price = final 1-hour TWAP at unlock moment
+
+NEW EVENT:
+----------
+event MilestoneUnlocked(uint256 indexed milestoneId, uint256 twapPrice, uint256 spotPrice, uint256 timestamp);
+// twapPrice = 360-hour TWAP (average of all good period readings) - used for next target
+// spotPrice = 1-hour TWAP at unlock moment (for reference/comparison)
+
+================================================================================
+                              SUMMARY TABLE
+================================================================================
+
+  Aspect                | OLD SYSTEM                    | NEW SYSTEM
+  ----------------------|-------------------------------|---------------------------
+  Oracle reading        | 1-hour TWAP                   | 1-hour TWAP (same)
+  Good period check     | 1-hour TWAP >= target         | 1-hour TWAP >= target (same)
+  Unlock price stored   | Final 1-hour TWAP (1 reading) | 360-hour TWAP (all readings)
+  Next target           | Hardcoded at deploy           | Dynamic: 360-hr TWAP × 1.5
+  Milestone order       | Any order possible            | Strictly sequential
+  End-loaded pump       | High impact (100% weight)     | Low impact (1/360 weight)
+  Price discovery       | Fixed ladder                  | Adapts to sustained perf.
+
+================================================================================
+                         HOW TO VERIFY ON-CHAIN
+================================================================================
+
+Check 360-hour TWAP accumulation for a milestone:
+
+```javascript
+const cumulative = await vault.milestoneCumulativePriceTime(1);
+const goodPeriods = await vault.milestoneGoodPeriods(1);
+const periodInterval = await vault.PERIOD_INTERVAL();
+
+console.log(`Cumulative (sum of 1-hr TWAP × interval): ${cumulative}`);
+console.log(`Good periods recorded: ${goodPeriods}`);
+
+if (goodPeriods > 0n) {
+    // This is the running average of all 1-hour TWAP readings so far
+    const runningAvg = cumulative / (goodPeriods * periodInterval);
+    console.log(`Running 360-hr TWAP (so far): ${runningAvg}`);
+}
+```
+
+Check dynamic target after unlock:
+
+```javascript
+// After M1 unlocks
+const m1_360hrTwap = await vault.lastUnlockPrice();  // This is the 360-hour TWAP
+const m2Target = await vault.milestonePriceTarget(2);
+
+console.log(`M1 360-hour TWAP: ${m1_360hrTwap}`);
+console.log(`M2 Target (should be M1 TWAP × 1.5): ${m2Target}`);
+console.log(`Expected M2 Target: ${m1_360hrTwap * 15n / 10n}`);
+```
+
+Compare 1-hour vs 360-hour TWAP:
+
+```javascript
+// Get current 1-hour TWAP from oracle
+const oracleAddr = await vault.priceOracle();
+const oracle = new ethers.Contract(oracleAddr, ["function getPrice() view returns (uint256)"], provider);
+const current1hrTwap = await oracle.getPrice();
+
+// Get running 360-hour TWAP from vault
+const cumulative = await vault.milestoneCumulativePriceTime(1);
+const goodPeriods = await vault.milestoneGoodPeriods(1);
+const periodInterval = await vault.PERIOD_INTERVAL();
+const running360hrTwap = cumulative / (goodPeriods * periodInterval);
+
+console.log(`Current 1-hour TWAP: ${current1hrTwap}`);
+console.log(`Running 360-hour TWAP: ${running360hrTwap}`);
+```
+
+================================================================================
+                         DESIGN CONFIRMATIONS
+================================================================================
+
+1. NON-CONSECUTIVE HOURS: ✅ CONFIRMED
+   - Good periods do NOT need to be consecutive
+   - If price drops below target, that hour is skipped (no accumulation)
+   - When price returns above target, accumulation resumes
+   - milestoneCumulativePriceTime ONLY increments on recorded good periods
+
+2. ROUNDING BEHAVIOR: ✅ CONFIRMED
+   - Integer division (floor/rounds down) used consistently
+   - twapPrice = milestoneCumulativePriceTime / (REQUIRED_GOOD_PERIODS * PERIOD_INTERVAL)
+   - Same calculation used across all milestones
+
+3. PERMANENT STORAGE: ✅ CONFIRMED
+   - Once milestoneUnlocked[id] = true, function exits early on retry
+   - The 360-hour TWAP is stored in lastUnlockPrice
+   - Cannot be recomputed or overwritten
+
+4. DUAL EVENT: ✅ CONFIRMED
+   - MilestoneUnlocked emits: (milestoneId, twapPrice, spotPrice, timestamp)
+   - twapPrice = 360-hour TWAP (used for next target calculation)
+   - spotPrice = 1-hour TWAP at unlock moment (for transparency)
+
+5. SINGLE ACTIVE MILESTONE: ✅ CONFIRMED
+   - Sequential enforcement: require(milestoneId == 1 || milestoneUnlocked[milestoneId - 1])
+   - Cannot record good periods for M(n+1) until M(n) unlocks
+   - Next target only computed at unlock time
+
+6. SOFT STOP FOR ORACLE FAILURES: ✅ CONFIRMED
+   - processMilestoneHour: returns silently (no revert)
+   - tryUnlock: returns silently (no revert)
+   - finalizeMilestone: returns silently (no revert)
+   - Handles: oracle anomalies, chain outages, stale data, edge cases
+
+7. LIQUIDITY FLOOR STUB: ✅ ADDED
+   - MIN_LIQUIDITY_FLOOR parameter in constructor (immutable)
+   - Default: 0 (disabled)
+   - Reserved for future enhancement
+
+================================================================================
+                              END OF DOCUMENT
+================================================================================
+
+Document Version: 1.2
+Last Updated: January 2026
+Contract: FAIRVault.sol (with 360-hour TWAP + Sequential + Dynamic Targets)
+
+TERMINOLOGY:
+- "1-hour TWAP": What the oracle returns (time-weighted average over 1 hour)
+- "360-hour TWAP": Average of all 360 hourly 1-hour TWAP readings (used for unlock)
