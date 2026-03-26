@@ -84,8 +84,8 @@ contract FAIRVault is Ownable {
     /// @notice Minimum time between good period recordings (configurable: 1 hour prod, 1 min test)
     uint256 public immutable PERIOD_INTERVAL;
 
-    /// @notice Starting price target for milestone 1 ($0.000010 in 1e9 units)
-    uint256 public constant START_PRICE = 10;
+    /// @notice Starting price target for milestone 1 ($0.000030 in 1e6 units)
+    uint256 public constant START_PRICE = 30;
 
     /// @notice Minimum liquidity floor for good period qualification (0 = disabled, for future use)
     /// @dev Reserved for future enhancement: require minimum pool liquidity to count as good period
@@ -100,12 +100,12 @@ contract FAIRVault is Ownable {
     address public immutable S3_GROWTH;
     address public immutable S4_TEAM;
 
-    /// @notice Pool distribution ratios (out of 9000)
-    uint256 public constant TREASURY_NUM  = 5000;  // 55.56%
-    uint256 public constant GROWTH_NUM    = 2000;  // 22.22%
-    uint256 public constant LIQUIDITY_NUM = 1000;  // 11.11%
-    uint256 public constant TEAM_NUM      = 1000;  // 11.11%
-    uint256 public constant POOL_DEN      = 9000;
+    /// @notice Pool distribution ratios (out of 8500)
+    uint256 public constant TREASURY_NUM  = 5000;  // 58.82%
+    uint256 public constant GROWTH_NUM    = 2000;  // 23.53%
+    uint256 public constant LIQUIDITY_NUM = 500;   //  5.88%
+    uint256 public constant TEAM_NUM      = 1000;  // 11.76%
+    uint256 public constant POOL_DEN      = 8500;
 
     // -----------------------------
     // STATE
@@ -212,7 +212,7 @@ contract FAIRVault is Ownable {
         MIN_LIQUIDITY_FLOOR = _minLiquidityFloor;
 
         lastUnlockTime = _tgeTimestamp;
-        lastUnlockPrice = START_PRICE;
+        lastUnlockPrice = (START_PRICE * PRICE_MULTIPLIER_DEN) / PRICE_MULTIPLIER_NUM; // 30 * 10 / 15 = 20
 
         // Initialize price ladder (1.5x per milestone)
         uint256 price = START_PRICE;
@@ -318,7 +318,7 @@ contract FAIRVault is Ownable {
         if (milestoneUnlocked[milestoneId]) return (false, "Already unlocked");
         if (milestoneId > 1 && !milestoneUnlocked[milestoneId - 1]) return (false, "Previous milestone not unlocked");
         if (address(priceOracle) == address(0)) return (false, "Oracle not set");
-        if (block.timestamp < lastUnlockTime + WAIT_RULE) return (false, "Cooldown not elapsed");
+        if (milestoneId > 1 && block.timestamp < lastUnlockTime + WAIT_RULE) return (false, "Cooldown not elapsed");
         
         // Try to get price, return error if oracle fails
         uint256 price;
@@ -443,7 +443,7 @@ contract FAIRVault is Ownable {
         require(!milestoneUnlocked[milestoneId], "Already unlocked");
         require(milestoneId == 1 || milestoneUnlocked[milestoneId - 1], "Previous milestone not unlocked");
         require(address(priceOracle) != address(0), "Oracle not set");
-        require(block.timestamp >= lastUnlockTime + WAIT_RULE, "Cooldown not elapsed");
+        require(milestoneId == 1 || block.timestamp >= lastUnlockTime + WAIT_RULE, "Cooldown not elapsed");
 
         // SOFT STOP: Oracle failures don't revert - caller can retry later
         uint256 spotPrice;
@@ -522,7 +522,8 @@ contract FAIRVault is Ownable {
         }
 
         // 2) Check if can finalize (all conditions must be met)
-        if (block.timestamp < lastUnlockTime + WAIT_RULE) return;
+        // M1 has no cooldown wait - it unlocks as soon as good periods are met
+        if (milestoneId > 1 && block.timestamp < lastUnlockTime + WAIT_RULE) return;
         if (price < targetPrice) return;
         if (milestoneGoodPeriods[milestoneId] < REQUIRED_GOOD_PERIODS) return;
 

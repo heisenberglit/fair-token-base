@@ -1,31 +1,32 @@
 // scripts/shared/config.js
 // Centralized configuration for all environments
+// 1B total supply: 150M TGE + 850M locked in vault (18 milestones × ~47.2M)
 
 import "dotenv/config";
 
 /**
- * FAIR 10B Tokenomics Configuration
+ * FAIR 1B Tokenomics Configuration
  */
 export const TOKENOMICS = {
-  TOTAL_SUPPLY: "10000000000", // 10B
-  MILESTONE_UNLOCK: "500000000", // 500M per milestone (5%)
-  TGE_AMOUNT: "1000000000", // 1B (10%)
-  LOCKED_AMOUNT: "9000000000", // 9B (90%)
-  START_PRICE: 10, // $0.000010 in 1e9 units
+  TOTAL_SUPPLY: "1000000000",   // 1B total
+  LOCKED_AMOUNT: "850000000",   // 850M (85%) locked in vault across 18 milestones
+  TGE_AMOUNT: "150000000",      // 150M (15%) available at TGE
+  MILESTONE_UNLOCK: "47222222", // ~47.2M per milestone (850M / 18)
+  START_PRICE: 30,              // $0.000030 in 1e6 units (M1 target)
   MILESTONES: 18,
   COOLDOWN_DAYS: 90,
   GOOD_HOURS: 360,
 };
 
 /**
- * Pool distribution percentages
+ * Pool distribution percentages (out of 8500)
  */
 export const POOLS = {
-  TREASURY: 5000, // 55.56%
-  GROWTH: 2000, // 22.22%
-  LIQUIDITY: 1000, // 11.11%
-  TEAM: 1000, // 11.11%
-  TOTAL: 9000,
+  TREASURY: 5000,  // 58.82%
+  GROWTH: 2000,    // 23.53%
+  LIQUIDITY: 500,  //  5.88%
+  TEAM: 1000,      // 11.76%
+  TOTAL: 8500,
 };
 
 /**

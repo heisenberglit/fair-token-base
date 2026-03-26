@@ -14,7 +14,7 @@
 //
 // PRODUCTION (90 days cooldown, 360 hours):
 //   node scripts/mainnet/deploy-vault.js
-//
+//..
 // TEST MODE (4 hours cooldown, 2 periods):
 //   set VAULT_WAIT_RULE=14400
 //   set VAULT_GOOD_PERIODS=2  
