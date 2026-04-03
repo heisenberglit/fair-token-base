@@ -147,6 +147,11 @@ contract FAIRVault is Ownable {
     /// @notice Cumulative (price * time) per milestone for TWAP over qualifying window
     mapping(uint256 => uint256) public milestoneCumulativePriceTime;
 
+    /// @notice Whether a milestone has been earned but is pending distribution (vault underfunded at unlock time)
+    /// @dev Milestone is permanently earned (milestoneUnlocked = true) but tokens not yet sent.
+    ///      Safe refills vault, then anyone calls releasePending() to complete distribution.
+    mapping(uint256 => bool) public milestonePending;
+
     // -----------------------------
     // EVENTS
     // -----------------------------
@@ -155,6 +160,8 @@ contract FAIRVault is Ownable {
     event OracleSet(address indexed oracle);
     event OracleFrozen(address indexed oracle);
     event MilestoneUnlocked(uint256 indexed milestoneId, uint256 twapPrice, uint256 spotPrice, uint256 timestamp);
+    event MilestonePending(uint256 indexed milestoneId, uint256 amountOwed, uint256 vaultBalance);
+    event PendingMilestoneReleased(uint256 indexed milestoneId, uint256 amount);
     event GoodPeriodRecorded(uint256 indexed milestoneId, uint256 goodPeriods, uint256 price, uint256 timestamp);
     event TokensDistributed(uint256 treasury, uint256 growth, uint256 liquidity, uint256 team);
 
@@ -227,40 +234,22 @@ contract FAIRVault is Ownable {
     // -----------------------------
 
     /**
-     * @notice Initialize vault by depositing tokens
-     * @dev Call this after transferring tokens to the vault, or use depositTokens()
-     * @param _totalAmount Total tokens to lock (should match contract balance)
+     * @notice Initialize vault with the full programmatic supply — does NOT require tokens to be present yet.
+     * @dev Under staged funding, Safe holds most FAIR and sends tranches to the vault over time.
+     *      Call this with the TOTAL supply that will ever flow through the vault (e.g. 9,000,000,000 * 1e18).
+     *      This sets milestoneUnlockAmount = _totalLockedAmount / 18, independently of current vault balance.
+     *      Tokens are sent separately by Safe directly to this contract address, before each milestone.
+     * @param _totalLockedAmount Total FAIR that will be distributed across all 18 milestones
      */
-    function initialize(uint256 _totalAmount) external onlyOwner {
+    function initialize(uint256 _totalLockedAmount) external onlyOwner {
         require(!initialized, "Already initialized");
-        
-        uint256 balance = fairToken.balanceOf(address(this));
-        require(balance >= _totalAmount, "Insufficient balance");
-        require(_totalAmount > 0, "Amount zero");
+        require(_totalLockedAmount > 0, "Amount zero");
 
-        totalDeposited = _totalAmount;
-        milestoneUnlockAmount = _totalAmount / TOTAL_MILESTONES;
+        totalDeposited = _totalLockedAmount;
+        milestoneUnlockAmount = _totalLockedAmount / TOTAL_MILESTONES;
         initialized = true;
 
-        emit VaultInitialized(_totalAmount, milestoneUnlockAmount);
-    }
-
-    /**
-     * @notice Deposit and initialize in one transaction
-     * @dev Requires approval first: fairToken.approve(vault, amount)
-     * @param _amount Amount to deposit and lock
-     */
-    function depositAndInitialize(uint256 _amount) external onlyOwner {
-        require(!initialized, "Already initialized");
-        require(_amount > 0, "Amount zero");
-
-        fairToken.safeTransferFrom(msg.sender, address(this), _amount);
-        
-        totalDeposited = _amount;
-        milestoneUnlockAmount = _amount / TOTAL_MILESTONES;
-        initialized = true;
-
-        emit VaultInitialized(_amount, milestoneUnlockAmount);
+        emit VaultInitialized(_totalLockedAmount, milestoneUnlockAmount);
     }
 
     // -----------------------------
@@ -475,7 +464,7 @@ contract FAIRVault is Ownable {
             milestonePriceTarget[milestoneId + 1] = (twapPrice * PRICE_MULTIPLIER_NUM) / PRICE_MULTIPLIER_DEN;
         }
 
-        _distributeUnlock();
+        _distributeUnlock(milestoneId);
 
         // Emit both 360-hour TWAP (used for calculations) and current 1-hour TWAP (for transparency)
         emit MilestoneUnlocked(milestoneId, twapPrice, spotPrice, block.timestamp);
@@ -545,7 +534,7 @@ contract FAIRVault is Ownable {
             milestonePriceTarget[milestoneId + 1] = (twapPrice * PRICE_MULTIPLIER_NUM) / PRICE_MULTIPLIER_DEN;
         }
 
-        _distributeUnlock();
+        _distributeUnlock(milestoneId);
 
         // Emit both: 360-hour TWAP (used for next target) and current 1-hour TWAP (transparency)
         emit MilestoneUnlocked(milestoneId, twapPrice, price, block.timestamp);
@@ -555,20 +544,54 @@ contract FAIRVault is Ownable {
     // INTERNAL
     // -----------------------------
 
-    function _distributeUnlock() internal {
+    /**
+     * @notice Attempt to distribute tokens for an earned milestone.
+     * @dev If the vault balance is insufficient, the milestone is marked pending — NO partial payment.
+     *      The milestone remains permanently earned (milestoneUnlocked = true).
+     *      Once the Safe refills the vault, call releasePending(milestoneId) to complete distribution.
+     */
+    function _distributeUnlock(uint256 milestoneId) internal {
         uint256 amount = milestoneUnlockAmount;
-        
         uint256 balance = fairToken.balanceOf(address(this));
+
+        // If vault is underfunded: mark as pending, do NOT partially distribute.
+        // Safety: Safe (offchain multisig) controls when to refill the vault.
         if (balance < amount) {
-            amount = balance; // Distribute what's available
+            milestonePending[milestoneId] = true;
+            emit MilestonePending(milestoneId, amount, balance);
+            return;
         }
 
+        _sendDistribution(amount);
+    }
+
+    /**
+     * @notice Release a pending milestone once the vault has been refilled by the Safe.
+     * @dev Anyone can call this — it is fully permissionless and deterministic.
+     *      Reverts if milestone is not in pending state, or vault still underfunded.
+     * @param milestoneId Milestone ID (1-18) that is in pending state
+     */
+    function releasePending(uint256 milestoneId) external {
+        require(milestoneUnlocked[milestoneId], "Milestone not earned");
+        require(milestonePending[milestoneId], "Milestone not pending");
+
+        uint256 amount = milestoneUnlockAmount;
+        uint256 balance = fairToken.balanceOf(address(this));
+        require(balance >= amount, "Vault still underfunded - Safe must send more FAIR");
+
+        milestonePending[milestoneId] = false;
+        emit PendingMilestoneReleased(milestoneId, amount);
+
+        _sendDistribution(amount);
+    }
+
+    function _sendDistribution(uint256 amount) internal {
         uint256 treasuryShare  = (amount * TREASURY_NUM)  / POOL_DEN;
         uint256 growthShare    = (amount * GROWTH_NUM)    / POOL_DEN;
         uint256 liquidityShare = (amount * LIQUIDITY_NUM) / POOL_DEN;
         uint256 teamShare      = (amount * TEAM_NUM)      / POOL_DEN;
 
-        // Fix rounding dust
+        // Fix rounding dust: assign remainder to treasury
         uint256 distributed = treasuryShare + growthShare + liquidityShare + teamShare;
         if (distributed < amount) {
             treasuryShare += (amount - distributed);

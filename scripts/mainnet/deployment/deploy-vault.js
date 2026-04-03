@@ -22,9 +22,9 @@
 //   node scripts/mainnet/deploy-vault.js
 
 import { ethers } from "ethers";
-import { getWallet, checkBalance } from "../shared/provider.js";
-import { loadArtifact, CONTRACTS } from "../shared/artifacts.js";
-import { getWalletAddresses, getNetworkConfig, TGE_TIMESTAMP } from "../shared/config.js";
+import { getWallet, checkBalance } from "../../shared/provider.js";
+import { loadArtifact, CONTRACTS } from "../../shared/artifacts.js";
+import { getWalletAddresses, getNetworkConfig, TGE_TIMESTAMP } from "../../shared/config.js";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -329,65 +329,43 @@ TEAM=${wallets.team}
   console.log(`✅ Saved to scripts/mainnet/${path.basename(envPath)}\n`);
 
   // =====================
-  // STEP 6: Fund Vault with Tokens
+  // STEP 6: Initialize Vault (configure amounts — no token deposit here)
   // =====================
 
   console.log("=".repeat(50));
-  console.log("Step 6: Funding Vault with Tokens...");
+  console.log("Step 6: Initializing Vault (staged funding model)...");
   console.log("=".repeat(50));
-  
+
   const erc20Abi = [
     "function balanceOf(address) view returns (uint256)",
     "function decimals() view returns (uint8)",
     "function symbol() view returns (string)",
-    "function approve(address, uint256) returns (bool)"
   ];
   const fairToken = new ethers.Contract(EXISTING_FAIR_TOKEN, erc20Abi, wallet);
-  
   const symbol = await fairToken.symbol();
   const decimals = await fairToken.decimals();
-  const yourBalance = await fairToken.balanceOf(wallet.address);
-  
-  console.log(`  Your ${symbol} balance: ${ethers.formatUnits(yourBalance, decimals)}`);
-  
-  // Determine deposit amount (from env or use full balance)
-  let depositAmount;
-  if (process.env.VAULT_DEPOSIT_AMOUNT) {
-    depositAmount = ethers.parseUnits(process.env.VAULT_DEPOSIT_AMOUNT, decimals);
-    console.log(`  Deposit amount (from env): ${process.env.VAULT_DEPOSIT_AMOUNT} ${symbol}`);
-  } else {
-    depositAmount = yourBalance;
-    console.log(`  Deposit amount (full balance): ${ethers.formatUnits(depositAmount, decimals)} ${symbol}`);
+
+  // Total locked supply comes from VAULT_DEPOSIT_AMOUNT — the full amount that will ever be sent to the contract.
+  // milestoneUnlockAmount = VAULT_DEPOSIT_AMOUNT / 18
+  // Safe will send this in tranches; the contract distributes 1/18 per milestone earned.
+  if (!process.env.VAULT_DEPOSIT_AMOUNT) {
+    console.log("  ❌ VAULT_DEPOSIT_AMOUNT not set in .env");
+    console.log("     Add: VAULT_DEPOSIT_AMOUNT=850000000 (or your total locked supply)\n");
+    return;
   }
-  
-  if (yourBalance < depositAmount) {
-    console.log(`\n  ❌ Insufficient balance!`);
-    console.log(`     You have: ${ethers.formatUnits(yourBalance, decimals)} ${symbol}`);
-    console.log(`     Required: ${ethers.formatUnits(depositAmount, decimals)} ${symbol}`);
-    console.log(`\n  Vault deployed but NOT funded. Fund manually later.`);
-  } else if (depositAmount === 0n) {
-    console.log(`\n  ⚠️  No tokens to deposit. Fund the vault manually later.`);
-  } else {
-    console.log(`\n  Depositing ${ethers.formatUnits(depositAmount, decimals)} ${symbol} to vault...`);
-    
-    // Step 6a: Approve vault to spend tokens
-    console.log("  Approving vault...");
-    const approveTx = await fairToken.approve(deployments.vault, depositAmount);
-    await approveTx.wait();
-    console.log(`  ✅ Approved`);
-    
-    // Step 6b: Deposit and initialize
-    console.log("  Calling depositAndInitialize...");
-    const depositTx = await vault.depositAndInitialize(depositAmount);
-    await depositTx.wait();
-    console.log(`  ✅ Deposited and initialized!`);
-    
-    // Verify
-    const vaultBalance = await fairToken.balanceOf(deployments.vault);
-    const perMilestone = await vault.milestoneUnlockAmount();
-    console.log(`\n  Vault balance: ${ethers.formatUnits(vaultBalance, decimals)} ${symbol}`);
-    console.log(`  Per milestone: ${ethers.formatUnits(perMilestone, decimals)} ${symbol}`);
-  }
+  const TOTAL_LOCKED = process.env.VAULT_DEPOSIT_AMOUNT;
+  const totalLockedWei = ethers.parseUnits(TOTAL_LOCKED, decimals);
+  const perMilestoneWei = totalLockedWei / 18n;
+
+  console.log(`  Total locked supply: ${TOTAL_LOCKED} ${symbol}`);
+  console.log(`  Per milestone: ${ethers.formatUnits(perMilestoneWei, decimals)} ${symbol}`);
+  console.log(`  (Safe will send tranches to the vault — distribute 1/18 per milestone earned)\n`);
+
+  console.log("  Calling initialize...");
+  const initTx = await vault.initialize(totalLockedWei);
+  await initTx.wait();
+  console.log(`  ✅ Vault initialized!`);
+  console.log(`  milestoneUnlockAmount locked in at: ${ethers.formatUnits(perMilestoneWei, decimals)} ${symbol}\n`);
   console.log();
 
   // =====================
@@ -395,7 +373,7 @@ TEAM=${wallets.team}
   // =====================
 
   const finalVaultBalance = await fairToken.balanceOf(deployments.vault);
-  const isVaultFunded = finalVaultBalance > 0n;
+  const perMilestone = await vault.milestoneUnlockAmount();
 
   console.log("=".repeat(70));
   console.log("✅ DEPLOYMENT COMPLETE!");
@@ -403,37 +381,35 @@ TEAM=${wallets.team}
   console.log("\nDeployed Contracts:");
   console.log(`  FAIRVault: ${deployments.vault}`);
   console.log(`  AerodromeTWAPOracle: ${deployments.twapOracle}\n`);
-  
+
   console.log("🔒 Security Status:");
   console.log("  • Oracle: PERMANENTLY FROZEN");
   console.log("  • Price Source: Aerodrome TWAP (on-chain)");
   console.log("  • Pool Wallets: IMMUTABLE");
   console.log("  • Unlocks: FULLY AUTOMATIC\n");
-  
+
   console.log("💰 Vault Status:");
-  console.log(`  • Funded: ${isVaultFunded ? "✅ YES" : "❌ NO"}`);
-  console.log(`  • Balance: ${ethers.formatUnits(finalVaultBalance, decimals)} ${symbol}\n`);
+  console.log(`  • Initialized: YES`);
+  console.log(`  • Per-milestone amount: ${ethers.formatUnits(perMilestone, decimals)} ${symbol}`);
+  console.log(`  • Current vault balance: ${ethers.formatUnits(finalVaultBalance, decimals)} ${symbol}`);
+  console.log(`  • (Balance will be 0 until Safe sends the first tranche)\n`);
 
   console.log("Verify on Basescan:");
   console.log(`  Vault: ${config.explorer}/address/${deployments.vault}`);
   console.log(`  Oracle: ${config.explorer}/address/${deployments.twapOracle}\n`);
 
-  if (isVaultFunded) {
-    console.log("=".repeat(70));
-    console.log("📋 NEXT STEP: Start the Keeper Bot");
-    console.log("=".repeat(70));
-    console.log("\n  node scripts/keeper/keeper.js mainnet\n");
-  } else {
-    console.log("=".repeat(70));
-    console.log("📋 REMAINING STEPS:");
-    console.log("=".repeat(70));
-    console.log("\n  1. FUND THE VAULT:");
-    console.log(`     Transfer ${symbol} tokens to: ${deployments.vault}`);
-    console.log("     Then call: vault.initialize(amount)\n");
-    console.log("  2. START KEEPER BOT:");
-    console.log("     node scripts/keeper/keeper.js mainnet\n");
-  }
-  
+  console.log("=".repeat(70));
+  console.log("📋 NEXT STEPS (staged funding model):");
+  console.log("=".repeat(70));
+  console.log(`\n  1. FUND VAULT FROM SAFE (before milestone 1 is close):`);
+  console.log(`     Send ${ethers.formatUnits(perMilestone, decimals)} ${symbol} from Safe to:`);
+  console.log(`     ${deployments.vault}`);
+  console.log(`\n  2. START KEEPER BOT:`);
+  console.log(`     node scripts/keeper/keeper.js mainnet`);
+  console.log(`\n  3. ONGOING — before each milestone unlock:`);
+  console.log(`     Send another ${ethers.formatUnits(perMilestone, decimals)} ${symbol} from Safe to vault.`);
+  console.log(`     If vault was underfunded at unlock, call releasePending(milestoneId) after refilling.\n`);
+
   console.log("=".repeat(70));
   console.log("\n⚠️  The system is now TRUSTLESS.");
   console.log("    No one can change the oracle, recipients, or unlock rules.");

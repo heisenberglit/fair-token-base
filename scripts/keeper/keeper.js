@@ -142,7 +142,8 @@ async function getContractAndInterval() {
 
 async function runKeeper() {
   log(`Starting keeper for ${NETWORK}...`);
-  
+
+  const config = getNetworkConfig(NETWORK);
   const { wallet, fair, contractAddress, contractType } = await getContractAndInterval();
   
   log(`Wallet: ${wallet.address}`);
@@ -163,6 +164,41 @@ async function runKeeper() {
     log("Using FAIRTestnet");
   }
   
+  // Check for any pending milestones and attempt releasePending() if vault is now funded
+  if (contractType === "vault") {
+    try {
+      const erc20Abi = ["function balanceOf(address) view returns (uint256)"];
+      const tokenAddr = await fair.fairToken();
+      const token = new ethers.Contract(tokenAddr, erc20Abi, wallet.provider);
+      const vaultBalance = await token.balanceOf(contractAddress);
+      const perMilestone = await fair.milestoneUnlockAmount();
+
+      for (let i = 1; i <= 18; i++) {
+        const unlocked = await fair.milestoneUnlocked(i);
+        const pending = await fair.milestonePending(i);
+        if (unlocked && pending) {
+          log(`  ⏳ Milestone ${i} is PENDING (earned but not yet paid)`);
+          if (vaultBalance >= perMilestone) {
+            log(`  Vault has sufficient balance — calling releasePending(${i})...`);
+            try {
+              const gas = await fair.releasePending.estimateGas(i);
+              const tx = await fair.releasePending(i, { gasLimit: gas * 2n });
+              log(`  TX: ${tx.hash}`);
+              await tx.wait();
+              log(`  ✅ Milestone ${i} pending distribution released!`);
+            } catch (e) {
+              log(`  ❌ releasePending(${i}) failed: ${e.message}`);
+            }
+          } else {
+            log(`  Vault balance (${ethers.formatUnits(vaultBalance, 18)}) insufficient for release — Safe must send more FAIR`);
+          }
+        }
+      }
+    } catch (e) {
+      log(`  ⚠️  Could not check pending milestones: ${e.message}`);
+    }
+  }
+
   // Find current milestone
   let currentMilestone = 0;
   for (let i = 1; i <= 18; i++) {
@@ -382,14 +418,12 @@ async function runKeeper() {
           }
         }
       } catch (error) {
-        const config = getNetworkConfig(NETWORK);
         log(`  ⚠️  Could not verify status after unlock: ${error.message}`);
         log(`  ✅ Transaction succeeded (check on explorer: ${config.explorer}/tx/${tx.hash})`);
         log(`     This is normal if pool history is insufficient.`);
       }
   } catch (error) {
     // More detailed error handling
-    const config = getNetworkConfig(NETWORK);
     
     if (error.reason) {
       log(`❌ Error: ${error.reason}`);
