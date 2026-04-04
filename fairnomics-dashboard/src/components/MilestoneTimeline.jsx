@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { CheckCircle, Clock, Lock, TrendingUp, DollarSign, Coins } from 'lucide-react'
+import { CheckCircle, Clock, Lock, TrendingUp, DollarSign, Coins, AlertCircle } from 'lucide-react'
 import { useFairnomics } from '../contexts/FairnomicsContext'
 import { formatTokenAmount } from '../utils/formatToken'
 
@@ -31,13 +31,15 @@ const MilestoneTimeline = () => {
   }
 
   const getMilestoneStatus = (milestone) => {
+    if (milestone.unlocked && milestone.pending) return 'pending'
     if (milestone.unlocked) return 'unlocked'
     if (milestone.id === currentMilestone?.id) return 'current'
     return 'locked'
   }
 
   // Group milestones for better visualization
-  const unlockedCount = milestones.filter(m => m.unlocked).length
+  const unlockedCount = milestones.filter(m => m.unlocked && !m.pending).length
+  const pendingCount = milestones.filter(m => m.unlocked && m.pending).length
   const currentIndex = milestones.findIndex(m => m.id === currentMilestone?.id)
 
   return (
@@ -56,18 +58,24 @@ const MilestoneTimeline = () => {
           )}
         </div>
         <p className="text-gray-400 text-lg">All 18 milestones and their unlock conditions</p>
-        <div className="mt-4 flex items-center justify-center gap-6 text-sm">
+        <div className="mt-4 flex items-center justify-center gap-6 text-sm flex-wrap">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
             <span className="text-gray-400">{unlockedCount} Unlocked</span>
           </div>
+          {pendingCount > 0 && (
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-amber-500"></div>
+              <span className="text-gray-400">{pendingCount} Pending Distribution</span>
+            </div>
+          )}
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-indigo-500"></div>
             <span className="text-gray-400">1 In Progress</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-gray-700"></div>
-            <span className="text-gray-400">{18 - unlockedCount - 1} Locked</span>
+            <span className="text-gray-400">{18 - unlockedCount - pendingCount - 1} Locked</span>
           </div>
         </div>
         {lastUpdated && (
@@ -127,6 +135,8 @@ const MilestoneTimeline = () => {
                     className={`relative w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center ${
                       status === 'unlocked'
                         ? 'bg-emerald-500 border-2 border-emerald-400'
+                        : status === 'pending'
+                        ? 'bg-amber-500 border-2 border-amber-400'
                         : status === 'current'
                         ? 'bg-indigo-500 border-2 border-indigo-400'
                         : 'bg-gray-800 border-2 border-gray-700'
@@ -134,11 +144,10 @@ const MilestoneTimeline = () => {
                     whileHover={{ scale: 1.2 }}
                     transition={{ type: "spring", stiffness: 400, damping: 17 }}
                   >
-                    {/* Glow effect for current and unlocked */}
-                    {(status === 'unlocked' || status === 'current') && (
+                    {(status === 'unlocked' || status === 'pending' || status === 'current') && (
                       <motion.div
                         className={`absolute inset-0 rounded-full ${
-                          status === 'unlocked' ? 'bg-emerald-500' : 'bg-indigo-500'
+                          status === 'unlocked' ? 'bg-emerald-500' : status === 'pending' ? 'bg-amber-500' : 'bg-indigo-500'
                         } opacity-50 blur-md`}
                         animate={{ scale: [1, 1.5, 1], opacity: [0.5, 0.3, 0.5] }}
                         transition={{ duration: 2, repeat: Infinity }}
@@ -146,17 +155,21 @@ const MilestoneTimeline = () => {
                     )}
                     {status === 'unlocked' ? (
                       <CheckCircle className="text-white" size={16} />
+                    ) : status === 'pending' ? (
+                      <AlertCircle className="text-white" size={16} />
                     ) : status === 'current' ? (
                       <Clock className="text-white" size={16} />
                     ) : (
                       <Lock className="text-gray-500" size={16} />
                     )}
                   </motion.div>
-                  
+
                   {/* Milestone number badge */}
                   <div className={`absolute -top-2 -right-2 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
                     status === 'unlocked'
                       ? 'bg-emerald-400 text-emerald-900'
+                      : status === 'pending'
+                      ? 'bg-amber-400 text-amber-900'
                       : status === 'current'
                       ? 'bg-indigo-400 text-indigo-900'
                       : 'bg-gray-700 text-gray-400'
@@ -170,6 +183,8 @@ const MilestoneTimeline = () => {
                   className={`relative card group ${
                     status === 'unlocked'
                       ? 'border-emerald-500/40 bg-gradient-to-br from-emerald-500/10 to-emerald-900/5'
+                      : status === 'pending'
+                      ? 'border-amber-500/40 bg-gradient-to-br from-amber-500/10 to-amber-900/5 shadow-lg shadow-amber-500/10'
                       : status === 'current'
                       ? 'border-indigo-500/40 bg-gradient-to-br from-indigo-500/10 to-indigo-900/5 shadow-lg shadow-indigo-500/20'
                       : 'border-gray-800/50 bg-gray-900/30 opacity-75'
@@ -181,6 +196,8 @@ const MilestoneTimeline = () => {
                   <div className={`absolute top-0 left-0 right-0 h-1 rounded-t-xl ${
                     status === 'unlocked'
                       ? 'bg-gradient-to-r from-emerald-500 to-emerald-400'
+                      : status === 'pending'
+                      ? 'bg-gradient-to-r from-amber-500 to-yellow-400'
                       : status === 'current'
                       ? 'bg-gradient-to-r from-indigo-500 to-purple-500'
                       : 'bg-gray-800'
@@ -203,11 +220,14 @@ const MilestoneTimeline = () => {
                         <p className={`text-xs font-medium ${
                           status === 'unlocked'
                             ? 'text-emerald-400'
+                            : status === 'pending'
+                            ? 'text-amber-400'
                             : status === 'current'
                             ? 'text-indigo-400'
                             : 'text-gray-500'
                         }`}>
                           {status === 'unlocked' && '✓ Unlocked'}
+                          {status === 'pending' && '⏳ Earned — Awaiting Distribution'}
                           {status === 'current' && '⏳ In Progress'}
                           {status === 'locked' && '🔒 Locked'}
                         </p>
@@ -215,11 +235,13 @@ const MilestoneTimeline = () => {
                       <div className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
                         status === 'unlocked'
                           ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                          : status === 'pending'
+                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
                           : status === 'current'
                           ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
                           : 'bg-gray-800/50 text-gray-500 border border-gray-700/50'
                       }`}>
-                        {status === 'unlocked' ? 'COMPLETE' : status === 'current' ? 'ACTIVE' : 'PENDING'}
+                        {status === 'unlocked' ? 'COMPLETE' : status === 'pending' ? 'AWAITING FUNDS' : status === 'current' ? 'ACTIVE' : 'LOCKED'}
                       </div>
                     </div>
 
@@ -281,6 +303,16 @@ const MilestoneTimeline = () => {
                         <div className="flex items-center gap-2 text-xs text-emerald-400">
                           <CheckCircle size={14} />
                           <span>Successfully unlocked on-chain</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Pending badge */}
+                    {status === 'pending' && (
+                      <div className="mt-4 pt-4 border-t border-amber-500/20">
+                        <div className="flex items-center gap-2 text-xs text-amber-400">
+                          <AlertCircle size={14} />
+                          <span>Milestone earned — Safe must refill vault before distribution</span>
                         </div>
                       </div>
                     )}

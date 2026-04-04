@@ -93,20 +93,24 @@ export async function fetchMilestones(vaultAddress) {
     
     for (let i = 1; i <= TOTAL_MILESTONES; i++) {
       try {
-        const status = await vault.getMilestoneStatus(i)
-        
+        const [status, pending] = await Promise.all([
+          vault.getMilestoneStatus(i),
+          vault.milestonePending(i).catch(() => false),
+        ])
+
         const milestone = {
           id: i,
           unlocked: status.unlocked,
+          pending: pending,
           goodPeriods: Number(status.goodPeriods),
           priceTarget: Number(status.priceTarget),
           currentPrice: Number(status.currentPrice),
           unlockAmount: milestoneUnlockAmount,
           requiredPeriods: REQUIRED_GOOD_PERIODS,
         }
-        
+
         milestones.push(milestone)
-        
+
         // Find current milestone (first NOT unlocked milestone)
         // This is the milestone we're currently working towards
         if (!currentMilestone && !milestone.unlocked) {
@@ -114,10 +118,14 @@ export async function fetchMilestones(vaultAddress) {
           // Next milestone is the one after current
           if (i < TOTAL_MILESTONES) {
             try {
-              const nextStatus = await vault.getMilestoneStatus(i + 1)
+              const [nextStatus, nextPending] = await Promise.all([
+                vault.getMilestoneStatus(i + 1),
+                vault.milestonePending(i + 1).catch(() => false),
+              ])
               nextMilestone = {
                 id: i + 1,
                 unlocked: nextStatus.unlocked,
+                pending: nextPending,
                 goodPeriods: Number(nextStatus.goodPeriods),
                 priceTarget: Number(nextStatus.priceTarget),
                 currentPrice: Number(nextStatus.currentPrice),
@@ -125,12 +133,12 @@ export async function fetchMilestones(vaultAddress) {
                 requiredPeriods: REQUIRED_GOOD_PERIODS,
               }
             } catch (e) {
-              // If we can't get next milestone, calculate it
               const currentPriceTarget = milestone.priceTarget
               const nextPriceTarget = Math.floor((currentPriceTarget * PRICE_MULTIPLIER_NUM) / PRICE_MULTIPLIER_DEN)
               nextMilestone = {
                 id: i + 1,
                 unlocked: false,
+                pending: false,
                 goodPeriods: 0,
                 priceTarget: nextPriceTarget,
                 currentPrice: 0,
@@ -141,24 +149,26 @@ export async function fetchMilestones(vaultAddress) {
           }
         }
       } catch (error) {
-        // If getMilestoneStatus fails, calculate the milestone data
-        // This can happen if oracle is not set or pool has no history
         let priceTarget = START_PRICE
         for (let j = 1; j < i; j++) {
           priceTarget = Math.floor((priceTarget * PRICE_MULTIPLIER_NUM) / PRICE_MULTIPLIER_DEN)
         }
-        
-        // Check if unlocked
+
         let unlocked = false
+        let pending = false
         try {
-          unlocked = await vault.milestoneUnlocked(i)
+          [unlocked, pending] = await Promise.all([
+            vault.milestoneUnlocked(i).catch(() => false),
+            vault.milestonePending(i).catch(() => false),
+          ])
         } catch (e) {
           // Ignore
         }
-        
+
         milestones.push({
           id: i,
           unlocked,
+          pending,
           goodPeriods: 0,
           priceTarget,
           currentPrice: 0,
@@ -303,11 +313,31 @@ export async function fetchVaultStats(vaultAddress, fairTokenAddress) {
       console.warn('Could not get good periods:', error.message)
     }
     
+    // Check if vault is funded for the next milestone
+    const perMilestone = Number(vaultInfo.perMilestone)
+    const vaultFunded = perMilestone > 0 && vaultBalance >= perMilestone
+
+    // Get cooldown info
+    let lastUnlockTime = 0
+    let waitRule = 0
+    try {
+      [lastUnlockTime, waitRule] = await Promise.all([
+        vault.lastUnlockTime().then(Number),
+        vault.WAIT_RULE().then(Number),
+      ])
+    } catch (e) {
+      // Ignore
+    }
+    const cooldownEndsAt = lastUnlockTime > 0 ? (lastUnlockTime + waitRule) * 1000 : null
+
     return {
       totalLocked: vaultBalance,
       totalUnlocked: totalUnlocked || 0,
       currentPrice: currentPrice, // Keep in oracle format (will convert in component)
       goodPeriods,
+      vaultFunded,
+      perMilestone,
+      cooldownEndsAt,
     }
   } catch (error) {
     console.error('Error fetching vault stats:', error)

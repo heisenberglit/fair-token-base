@@ -1,17 +1,50 @@
 import { motion } from 'framer-motion'
-import { TrendingUp, Clock, Target, Lock, Shield, ExternalLink } from 'lucide-react'
+import { TrendingUp, Clock, Target, Lock, Shield, ExternalLink, AlertCircle, CheckCircle } from 'lucide-react'
 import { useFairnomics } from '../contexts/FairnomicsContext'
 import { formatTokenAmount } from '../utils/formatToken'
 
+const formatDuration = (seconds) => {
+  if (!seconds || seconds === 0) return 'No cooldown'
+  const days = Math.floor(seconds / 86400)
+  const hours = Math.floor((seconds % 86400) / 3600)
+  const months = Math.floor(days / 30)
+  if (months >= 1) return `${months} Month${months !== 1 ? 's' : ''} Cooldown`
+  if (days >= 1) return `${days} Day${days !== 1 ? 's' : ''} Cooldown`
+  return `${hours} Hour${hours !== 1 ? 's' : ''} Cooldown`
+}
+
+const formatCooldownRemaining = (cooldownEndsAt) => {
+  if (!cooldownEndsAt) return null
+  const now = Date.now()
+  const remaining = cooldownEndsAt - now
+  if (remaining <= 0) return null
+  const hours = Math.floor(remaining / 3600000)
+  const minutes = Math.floor((remaining % 3600000) / 60000)
+  if (hours > 24) {
+    const days = Math.floor(hours / 24)
+    return `${days}d ${hours % 24}h remaining`
+  }
+  return `${hours}h ${minutes}m remaining`
+}
+
 const Dashboard = () => {
   const { currentMilestone, nextMilestone, stats, milestones = [], config, loading, refreshing, error, lastUpdated } = useFairnomics()
-  
+
   // Get required periods from config or milestone
   const requiredPeriods = config?.requiredGoodPeriods || currentMilestone?.requiredPeriods || 2
-  
+
   // Get vault address from env
   const vaultAddress = import.meta.env.VITE_VAULT_ADDRESS || '0x...'
   const fairTokenAddress = import.meta.env.VITE_FAIR_TOKEN_ADDRESS || '0x...'
+
+  // Cooldown info
+  const waitRuleSeconds = config?.waitRule || 0
+  const cooldownLabel = formatDuration(waitRuleSeconds)
+  const cooldownRemaining = formatCooldownRemaining(stats?.cooldownEndsAt)
+
+  // Vault funding status
+  const pendingMilestones = milestones.filter(m => m.unlocked && m.pending)
+  const hasPending = pendingMilestones.length > 0
   
   // Only show loading on initial load (no data yet)
   if (loading && !currentMilestone && milestones.length === 0) {
@@ -87,8 +120,10 @@ const Dashboard = () => {
     },
     {
       icon: Clock,
-      title: '3 Months Cooldown',
-      description: 'Minimum 3 months between unlock events',
+      title: cooldownLabel,
+      description: waitRuleSeconds > 0
+        ? `Minimum ${cooldownLabel.toLowerCase().replace(' cooldown', '')} between unlock events (${waitRuleSeconds.toLocaleString()}s on-chain)`
+        : 'No cooldown configured',
       color: 'from-purple-500 to-pink-600',
       bgColor: 'bg-purple-500/10',
       borderColor: 'border-purple-500/20',
@@ -190,6 +225,58 @@ const Dashboard = () => {
           )
         })}
       </div>
+
+      {/* Vault Status Banners */}
+      {(hasPending || cooldownRemaining) && (
+        <div className="space-y-3">
+          {hasPending && !stats?.vaultFunded && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="card border-amber-500/30 bg-amber-500/5 flex items-start gap-3"
+            >
+              <AlertCircle className="text-amber-400 flex-shrink-0 mt-0.5" size={18} />
+              <div>
+                <p className="text-sm font-semibold text-amber-300 mb-0.5">
+                  {pendingMilestones.length} Milestone{pendingMilestones.length !== 1 ? 's' : ''} Awaiting Distribution
+                </p>
+                <p className="text-xs text-amber-400/80">
+                  Milestone{pendingMilestones.length !== 1 ? 's' : ''} #{pendingMilestones.map(m => m.id).join(', #')} earned but vault underfunded. Treasury Safe must send FAIR tokens to the vault.
+                </p>
+              </div>
+            </motion.div>
+          )}
+          {hasPending && stats?.vaultFunded && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="card border-emerald-500/30 bg-emerald-500/5 flex items-start gap-3"
+            >
+              <CheckCircle className="text-emerald-400 flex-shrink-0 mt-0.5" size={18} />
+              <div>
+                <p className="text-sm font-semibold text-emerald-300 mb-0.5">
+                  Vault funded — pending distribution ready
+                </p>
+                <p className="text-xs text-emerald-400/80">
+                  Keeper will call releasePending() shortly to distribute milestone #{pendingMilestones.map(m => m.id).join(', #')}.
+                </p>
+              </div>
+            </motion.div>
+          )}
+          {cooldownRemaining && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="card border-purple-500/30 bg-purple-500/5 flex items-center gap-3"
+            >
+              <Clock className="text-purple-400 flex-shrink-0" size={18} />
+              <p className="text-sm text-purple-300">
+                Cooldown active — next unlock eligible in <span className="font-semibold">{cooldownRemaining}</span>
+              </p>
+            </motion.div>
+          )}
+        </div>
+      )}
 
       {/* Current & Next Milestone */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

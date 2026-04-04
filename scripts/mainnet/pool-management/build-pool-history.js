@@ -3,8 +3,8 @@
 // Usage: node scripts/mainnet/build-pool-history.js [POOL_ADDRESS] [NUM_SWAPS]
 
 import { ethers } from "ethers";
-import { getWallet } from "../shared/provider.js";
-import { getNetworkConfig } from "../shared/config.js";
+import { getWallet } from "../../shared/provider.js";
+import { getNetworkConfig } from "../../shared/config.js";
 import "dotenv/config";
 
 async function main() {
