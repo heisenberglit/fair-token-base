@@ -47,18 +47,15 @@ const MilestoneTimeline = () => {
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="text-center mb-12"
+        className="mb-8"
       >
-        <div className="flex items-center justify-center gap-3 mb-3">
-          <h1 className="text-5xl font-bold bg-gradient-to-r from-white via-gray-200 to-gray-400 bg-clip-text text-transparent">
-            Milestone Timeline
-          </h1>
+        <div className="flex items-center gap-3 mb-2">
+          <p className="text-gray-400 text-sm">All 18 milestones and their unlock conditions</p>
           {refreshing && (
-            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-500"></div>
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-500"></div>
           )}
         </div>
-        <p className="text-gray-400 text-lg">All 18 milestones and their unlock conditions</p>
-        <div className="mt-4 flex items-center justify-center gap-6 text-sm flex-wrap">
+        <div className="flex items-center gap-6 text-sm flex-wrap">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
             <span className="text-gray-400">{unlockedCount} Unlocked</span>

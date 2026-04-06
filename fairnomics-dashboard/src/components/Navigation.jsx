@@ -1,12 +1,6 @@
 import { motion } from 'framer-motion'
-import { LayoutDashboard, Clock } from 'lucide-react'
 
-const Navigation = ({ activeSection, setActiveSection }) => {
-  const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'timeline', label: 'Timeline', icon: Clock },
-  ]
-
+const Navigation = () => {
   return (
     <nav className="sticky top-0 z-50 mb-8 border-b border-gray-900/50 bg-black/80 backdrop-blur-2xl">
       <div className="container mx-auto px-6 py-4">
@@ -21,28 +15,6 @@ const Navigation = ({ activeSection, setActiveSection }) => {
             </div>
             <h1 className="text-2xl font-bold text-white">FAIR Token</h1>
           </motion.div>
-
-          <div className="flex gap-2">
-            {navItems.map((item) => {
-              const Icon = item.icon
-              const isActive = activeSection === item.id
-              
-              return (
-                <motion.button
-                  key={item.id}
-                  onClick={() => setActiveSection(item.id)}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  className={`nav-button flex items-center gap-2 ${
-                    isActive ? 'nav-button-active' : 'nav-button-inactive'
-                  }`}
-                >
-                  <Icon size={18} />
-                  <span className="hidden md:inline font-medium">{item.label}</span>
-                </motion.button>
-              )
-            })}
-          </div>
         </div>
       </div>
     </nav>

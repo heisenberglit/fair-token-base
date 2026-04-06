@@ -2,6 +2,7 @@ import { motion } from 'framer-motion'
 import { TrendingUp, Clock, Target, Lock, Shield, ExternalLink, AlertCircle, CheckCircle } from 'lucide-react'
 import { useFairnomics } from '../contexts/FairnomicsContext'
 import { formatTokenAmount } from '../utils/formatToken'
+import MilestoneTimeline from './MilestoneTimeline'
 
 const formatDuration = (seconds) => {
   if (!seconds || seconds === 0) return 'No cooldown'
@@ -35,8 +36,6 @@ const Dashboard = () => {
 
   // Get vault address from env
   const vaultAddress = import.meta.env.VITE_VAULT_ADDRESS || '0x...'
-  const fairTokenAddress = import.meta.env.VITE_FAIR_TOKEN_ADDRESS || '0x...'
-
   // Cooldown info
   const waitRuleSeconds = config?.waitRule || 0
   const cooldownLabel = formatDuration(waitRuleSeconds)
@@ -155,25 +154,6 @@ const Dashboard = () => {
     { label: 'Growth / Memetics', amount: '20%', value: '200M FAIR', color: 'from-emerald-500 to-green-600' },
     { label: 'Community Reserve', amount: '50%', value: '500M FAIR', color: 'from-blue-500 to-cyan-600' },
     { label: 'LP & Buffer', amount: '10%', value: '100M FAIR', color: 'from-gray-500 to-gray-600' },
-  ]
-
-  const faqs = [
-    {
-      question: "Where's the GitHub?",
-      answer: "GitHub.com/fairnomics"
-    },
-    {
-      question: "What inspired Fairnomics?",
-      answer: "Crypto has long needed a fair tokenomics model that works for communities and long-term builders. This 2025 tweet by CZ inspired us to build FAIR."
-    },
-    {
-      question: "Is FAIR on CoinMarketCap?",
-      answer: "Coming soon!"
-    },
-    {
-      question: "What other projects use Fairnomics?",
-      answer: "$A2A and several more are in development!"
-    }
   ]
 
   return (
@@ -467,78 +447,28 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Token Data & FAQ - Side by Side */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Token Data */}
-        <div className="flex flex-col">
-          <h2 className="text-2xl font-bold text-white mb-6">Token Data</h2>
-          <div className="card flex-1">
-            <div className="space-y-4">
-              <div className="flex justify-between items-center pb-3 border-b border-gray-800">
-                <span className="text-gray-400 text-sm">Chain</span>
-                <span className="text-white font-semibold">Base</span>
-              </div>
-              <div className="flex justify-between items-center pb-3 border-b border-gray-800">
-                <span className="text-gray-400 text-sm">Contract</span>
-                {fairTokenAddress && fairTokenAddress !== '0x...' ? (
-                  <a
-                    href={`https://basescan.org/address/${fairTokenAddress}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-indigo-400 hover:text-indigo-300 text-sm font-semibold flex items-center gap-1"
-                  >
-                    {fairTokenAddress.slice(0, 6)}...{fairTokenAddress.slice(-4)}
-                    <ExternalLink size={12} />
-                  </a>
-                ) : (
-                  <span className="text-white font-semibold text-sm">-</span>
-                )}
-              </div>
-              <div className="flex justify-between items-center pb-3 border-b border-gray-800">
-                <span className="text-gray-400 text-sm">DEX</span>
-                <span className="text-white font-semibold">Aerodrome USDC/FAIR</span>
-              </div>
-              <div className="flex justify-between items-center pb-3 border-b border-gray-800">
-                <span className="text-gray-400 text-sm">Market Cap</span>
-                <span className="text-white font-semibold">$1.5M</span>
-              </div>
-              <div className="flex justify-between items-center pb-3 border-b border-gray-800">
-                <span className="text-gray-400 text-sm">FDV</span>
-                <span className="text-white font-semibold">$10.0M</span>
-              </div>
-              <div className="flex justify-between items-center pb-3 border-b border-gray-800">
-                <span className="text-gray-400 text-sm">Circulating Supply</span>
-                <span className="text-white font-semibold">1B FAIR</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400 text-sm">Max Supply</span>
-                <span className="text-white font-semibold">10B FAIR</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* FAQ */}
-        <div className="flex flex-col">
-          <h2 className="text-2xl font-bold text-white mb-6">FAQ</h2>
-          <div className="card flex-1">
-            <div className="space-y-3">
-              {faqs.map((faq, index) => (
-                <motion.div
-                  key={index}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                  className={index < faqs.length - 1 ? "pb-3 border-b border-gray-800" : ""}
-                >
-                  <h3 className="text-sm font-semibold text-white mb-1">Q: {faq.question}</h3>
-                  <p className="text-xs text-gray-400 leading-relaxed">A: {faq.answer}</p>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        </div>
+      {/* Milestone Timeline */}
+      <div>
+        <h2 className="text-2xl font-bold text-white mb-6">Milestone Timeline</h2>
+        <MilestoneTimeline />
       </div>
+
+      {/* Footer */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="pt-8 pb-4 border-t border-gray-800 text-center space-y-5"
+      >
+        <p className="text-xl font-semibold text-white">Stay FAIR.</p>
+        <img
+          src="https://fairmark.net/wp-content/uploads/2026/04/Earth_Artemis2_photo.png"
+          alt="Earth from space"
+          className="mx-auto w-20 h-20 rounded-full object-cover opacity-80"
+        />
+        <p className="text-xs text-gray-500 leading-relaxed max-w-2xl mx-auto">
+          Fairnomics is an open, rules-based tokenomics framework. FAIR is a utility token designed for use within the Fairmark Network and its applications. This site is for informational purposes only and does not constitute financial advice, investment advice, or an offer or solicitation to buy or sell any asset.
+        </p>
+      </motion.div>
     </div>
   )
 }
