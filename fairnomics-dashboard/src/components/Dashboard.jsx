@@ -233,7 +233,7 @@ const Dashboard = () => {
           <div className="p-2 rounded-lg bg-emerald-500/10 w-fit mb-4">
             <TrendingUp className="text-emerald-400" size={20} />
           </div>
-          <p className="text-gray-500 text-xs font-medium mb-1 uppercase tracking-wider">Current USDC/FAIR</p>
+          <p className="text-gray-500 text-xs font-medium mb-1 uppercase tracking-wider">Current USDC/FAIR TWAP (1hr)</p>
           <p className="text-2xl font-bold text-emerald-400">{currentPriceDisplay}</p>
         </motion.div>
 
