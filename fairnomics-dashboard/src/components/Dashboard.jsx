@@ -1,8 +1,50 @@
 import { motion } from 'framer-motion'
+import { useState, useEffect } from 'react'
+import { ethers } from 'ethers'
 import { TrendingUp, Clock, Target, Lock, Shield, ExternalLink, AlertCircle, CheckCircle } from 'lucide-react'
 import { useFairnomics } from '../contexts/FairnomicsContext'
 import { formatTokenAmount } from '../utils/formatToken'
 import MilestoneTimeline from './MilestoneTimeline'
+import { ERC20_ABI } from '../services/contracts'
+
+// Pool definitions — update safeAddress for each pool when known
+// Ordered by allocation size (largest first)
+const ALLOCATION_POOLS = [
+  { label: 'Community Reserve', pct: 85, tokens: '850M FAIR', color: 'from-blue-500 to-cyan-600', safeAddress: null },
+  { label: 'Growth & Memetics', pct: 5,  tokens: '50M FAIR',  color: 'from-emerald-500 to-green-600', safeAddress: null },
+  { label: 'Team Pool',         pct: 5,  tokens: '50M FAIR',  color: 'from-purple-500 to-pink-600', safeAddress: null },
+  { label: 'Seed Sale',         pct: 3,  tokens: '30M FAIR',  color: 'from-indigo-500 to-purple-600', safeAddress: null },
+  { label: 'LP & Buffer',       pct: 2,  tokens: '20M FAIR',  color: 'from-gray-500 to-gray-600', safeAddress: null },
+]
+
+const TOTAL_SUPPLY = 1_000_000_000 // 1B FAIR
+
+function useSafeBalances(pools, fairTokenAddress, rpcUrl) {
+  const [balances, setBalances] = useState({})
+  useEffect(() => {
+    if (!fairTokenAddress || !rpcUrl) return
+    const addressedPools = pools.filter(p => p.safeAddress)
+    if (addressedPools.length === 0) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const provider = new ethers.JsonRpcProvider(rpcUrl)
+        const token = new ethers.Contract(fairTokenAddress, ERC20_ABI, provider)
+        const results = await Promise.all(
+          addressedPools.map(p => token.balanceOf(p.safeAddress).catch(() => 0n))
+        )
+        if (cancelled) return
+        const map = {}
+        addressedPools.forEach((p, i) => { map[p.label] = Number(results[i]) })
+        setBalances(map)
+      } catch (e) {
+        console.warn('Could not fetch Safe balances:', e.message)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [fairTokenAddress, rpcUrl])
+  return balances
+}
 
 const formatDuration = (seconds) => {
   if (!seconds || seconds === 0) return 'No cooldown'
@@ -36,6 +78,10 @@ const Dashboard = () => {
 
   // Get vault address from env
   const vaultAddress = import.meta.env.VITE_VAULT_ADDRESS || '0x...'
+  const fairTokenAddress = import.meta.env.VITE_FAIR_TOKEN_ADDRESS || null
+  const rpcUrl = import.meta.env.VITE_BASE_RPC_URL || import.meta.env.VITE_RPC_URL || 'https://mainnet.base.org'
+  const safeBalances = useSafeBalances(ALLOCATION_POOLS, fairTokenAddress, rpcUrl)
+
   // Cooldown info
   const waitRuleSeconds = config?.waitRule || 0
   const cooldownLabel = formatDuration(waitRuleSeconds)
@@ -146,14 +192,6 @@ const Dashboard = () => {
       borderColor: 'border-blue-500/20',
       textColor: 'text-blue-400',
     },
-  ]
-
-  const allocations = [
-    { label: 'Seed Sale', amount: '10%', value: '100M FAIR', color: 'from-indigo-500 to-purple-600' },
-    { label: 'Team Pool', amount: '10%', value: '100M FAIR', color: 'from-purple-500 to-pink-600' },
-    { label: 'Growth / Memetics', amount: '20%', value: '200M FAIR', color: 'from-emerald-500 to-green-600' },
-    { label: 'Community Reserve', amount: '50%', value: '500M FAIR', color: 'from-blue-500 to-cyan-600' },
-    { label: 'LP & Buffer', amount: '10%', value: '100M FAIR', color: 'from-gray-500 to-gray-600' },
   ]
 
   return (
@@ -415,34 +453,68 @@ const Dashboard = () => {
 
       {/* Token Allocation */}
       <div>
-        <h2 className="text-2xl font-bold text-white mb-6">Token Allocation</h2>
+        <div className="flex items-end justify-between mb-3">
+          <h2 className="text-2xl font-bold text-white">Token Allocation</h2>
+        </div>
+        {stats?.totalLocked > 0 && (
+          <p className="text-sm text-gray-400 mb-6">
+            {formatTokenAmount(stats.totalLocked)} FAIR currently locked in vault
+            {' '}
+            <span className="text-gray-500">
+              ({((stats.totalLocked / TOTAL_SUPPLY) * 100).toFixed(1)}% of {formatTokenAmount(TOTAL_SUPPLY)} supply)
+            </span>
+          </p>
+        )}
         <div className="card">
-          <div className="space-y-4">
-            {allocations.map((allocation, index) => (
-              <motion.div
-                key={allocation.label}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.1 }}
-                className="space-y-2"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-gray-300">{allocation.label}</span>
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm text-gray-400">{allocation.amount}</span>
-                    <span className="text-sm font-semibold text-white">{allocation.value}</span>
+          <div className="space-y-5">
+            {ALLOCATION_POOLS.map((pool, index) => {
+              const safeBalance = safeBalances[pool.label]
+              const hasSafe = !!pool.safeAddress
+              return (
+                <motion.div
+                  key={pool.label}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                  className="space-y-2"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      {hasSafe ? (
+                        <a
+                          href={`https://basescan.org/address/${pool.safeAddress}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm font-medium text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-1"
+                        >
+                          {pool.label}
+                          <ExternalLink size={11} className="opacity-60" />
+                        </a>
+                      ) : (
+                        <span className="text-sm font-medium text-gray-300">{pool.label}</span>
+                      )}
+                      {safeBalance !== undefined && (
+                        <span className="text-xs text-gray-500 ml-1">
+                          ({formatTokenAmount(safeBalance)} in Safe)
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-gray-500">{pool.pct}%</span>
+                      <span className="text-sm font-semibold text-white">{pool.tokens}</span>
+                    </div>
                   </div>
-                </div>
-                <div className="w-full bg-gray-800 rounded-full h-2 overflow-hidden">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: allocation.amount }}
-                    transition={{ duration: 0.8, delay: index * 0.1 }}
-                    className={`h-full bg-gradient-to-r ${allocation.color} rounded-full`}
-                  />
-                </div>
-              </motion.div>
-            ))}
+                  <div className="w-full bg-gray-800 rounded-full h-2 overflow-hidden">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${pool.pct}%` }}
+                      transition={{ duration: 0.8, delay: index * 0.1 }}
+                      className={`h-full bg-gradient-to-r ${pool.color} rounded-full`}
+                    />
+                  </div>
+                </motion.div>
+              )
+            })}
           </div>
         </div>
       </div>

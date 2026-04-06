@@ -86,11 +86,27 @@ export async function fetchMilestones(vaultAddress) {
       }
     }
     
+    // Fetch MilestoneUnlocked events to get timestamp and TWAP price at unlock
+    const unlockedEventMap = {}
+    try {
+      const filter = vault.filters.MilestoneUnlocked()
+      const events = await vault.queryFilter(filter)
+      for (const evt of events) {
+        const id = Number(evt.args.milestoneId)
+        unlockedEventMap[id] = {
+          unlockTimestamp: Number(evt.args.timestamp) * 1000, // convert to ms
+          unlockPrice: Number(evt.args.price),
+        }
+      }
+    } catch (e) {
+      console.warn('Could not fetch MilestoneUnlocked events:', e.message)
+    }
+
     // Fetch all milestones
     const milestones = []
     let currentMilestone = null
     let nextMilestone = null
-    
+
     for (let i = 1; i <= TOTAL_MILESTONES; i++) {
       try {
         const [status, pending] = await Promise.all([
@@ -107,6 +123,8 @@ export async function fetchMilestones(vaultAddress) {
           currentPrice: Number(status.currentPrice),
           unlockAmount: milestoneUnlockAmount,
           requiredPeriods: REQUIRED_GOOD_PERIODS,
+          unlockTimestamp: status.unlocked ? (unlockedEventMap[i]?.unlockTimestamp || null) : null,
+          unlockPrice: status.unlocked ? (unlockedEventMap[i]?.unlockPrice ?? null) : null,
         }
 
         milestones.push(milestone)
@@ -174,6 +192,8 @@ export async function fetchMilestones(vaultAddress) {
           currentPrice: 0,
           unlockAmount: milestoneUnlockAmount,
           requiredPeriods: REQUIRED_GOOD_PERIODS,
+          unlockTimestamp: unlocked ? (unlockedEventMap[i]?.unlockTimestamp || null) : null,
+          unlockPrice: unlocked ? (unlockedEventMap[i]?.unlockPrice ?? null) : null,
         })
       }
     }

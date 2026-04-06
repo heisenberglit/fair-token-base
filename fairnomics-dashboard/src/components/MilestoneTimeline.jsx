@@ -1,11 +1,16 @@
 import { motion } from 'framer-motion'
-import { CheckCircle, Clock, Lock, TrendingUp, DollarSign, Coins, AlertCircle } from 'lucide-react'
+import { CheckCircle, Clock, Lock, TrendingUp, Coins, AlertCircle } from 'lucide-react'
 import { useFairnomics } from '../contexts/FairnomicsContext'
 import { formatTokenAmount } from '../utils/formatToken'
 
+const formatUnlockDate = (timestamp) => {
+  if (!timestamp) return null
+  return new Date(timestamp).toISOString().slice(0, 10) // YYYY-MM-DD
+}
+
 const MilestoneTimeline = () => {
   const { milestones = [], currentMilestone, loading, refreshing, error, lastUpdated } = useFairnomics()
-  
+
   // Only show loading on initial load
   if (loading && milestones.length === 0) {
     return (
@@ -17,7 +22,7 @@ const MilestoneTimeline = () => {
       </div>
     )
   }
-  
+
   // Only show error if no data exists
   if (error && milestones.length === 0) {
     return (
@@ -37,10 +42,8 @@ const MilestoneTimeline = () => {
     return 'locked'
   }
 
-  // Group milestones for better visualization
   const unlockedCount = milestones.filter(m => m.unlocked && !m.pending).length
   const pendingCount = milestones.filter(m => m.unlocked && m.pending).length
-  const currentIndex = milestones.findIndex(m => m.id === currentMilestone?.id)
 
   return (
     <div className="space-y-8">
@@ -81,7 +84,7 @@ const MilestoneTimeline = () => {
           </p>
         )}
       </motion.div>
-      
+
       {/* Show error banner if there's an error but we have data */}
       {error && milestones.length > 0 && (
         <motion.div
@@ -112,11 +115,12 @@ const MilestoneTimeline = () => {
         <div className="space-y-8">
           {milestones.map((milestone, index) => {
             const status = getMilestoneStatus(milestone)
-            const progress = status === 'current' 
-              ? (milestone.goodPeriods / milestone.requiredPeriods) * 100 
-              : status === 'unlocked' 
-              ? 100 
+            const progress = status === 'current'
+              ? (milestone.goodPeriods / milestone.requiredPeriods) * 100
+              : status === 'unlocked'
+              ? 100
               : 0
+            const unlockDate = formatUnlockDate(milestone.unlockTimestamp)
 
             return (
               <motion.div
@@ -126,7 +130,7 @@ const MilestoneTimeline = () => {
                 transition={{ delay: index * 0.03, duration: 0.5 }}
                 className="relative pl-20 md:pl-24"
               >
-                {/* Timeline node with glow effect */}
+                {/* Timeline node */}
                 <div className="absolute left-8 md:left-12 top-6 -translate-x-1/2 z-20">
                   <motion.div
                     className={`relative w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center ${
@@ -223,10 +227,10 @@ const MilestoneTimeline = () => {
                             ? 'text-indigo-400'
                             : 'text-gray-500'
                         }`}>
-                          {status === 'unlocked' && '✓ Unlocked'}
-                          {status === 'pending' && '⏳ Earned — Awaiting Distribution'}
-                          {status === 'current' && '⏳ In Progress'}
-                          {status === 'locked' && '🔒 Locked'}
+                          {status === 'unlocked' && `Unlocked${unlockDate ? ` ${unlockDate}` : ''}`}
+                          {status === 'pending' && 'Earned — Awaiting Distribution'}
+                          {status === 'current' && 'In Progress'}
+                          {status === 'locked' && 'Locked'}
                         </p>
                       </div>
                       <div className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
@@ -244,18 +248,34 @@ const MilestoneTimeline = () => {
 
                     {/* Details Grid */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                      {/* Price cell */}
                       <div className="flex items-center gap-3 p-3 rounded-lg bg-black/20 border border-gray-800/50">
-                        <div className="p-2 rounded-lg bg-indigo-500/10">
-                          <DollarSign className="text-indigo-400" size={18} />
+                        <div className={`p-2 rounded-lg ${
+                          status === 'unlocked' ? 'bg-emerald-500/10' : 'bg-indigo-500/10'
+                        }`}>
+                          <TrendingUp className={
+                            status === 'unlocked' ? 'text-emerald-400' :
+                            status === 'current' ? 'text-indigo-400' :
+                            status === 'pending' ? 'text-amber-400' :
+                            'text-indigo-400'
+                          } size={18} />
                         </div>
                         <div className="flex-1">
-                          <p className="text-xs text-gray-500 mb-0.5">Price Target</p>
+                          <p className="text-xs text-gray-500 mb-0.5">
+                            {status === 'unlocked' || status === 'pending' ? 'Unlocked at' : 'Unlocks at or above'}
+                          </p>
                           <p className="text-sm font-bold text-white">
-                            ${(milestone.priceTarget / 1_000_000).toFixed(6)}
+                            {status === 'unlocked' && milestone.unlockPrice !== null
+                              ? `${(milestone.unlockPrice / 1_000_000).toFixed(6)} USDC`
+                              : status === 'locked'
+                              ? 'TBD'
+                              : `${(milestone.priceTarget / 1_000_000).toFixed(6)} USDC`
+                            }
                           </p>
                         </div>
                       </div>
-                      
+
+                      {/* Unlock amount cell */}
                       <div className="flex items-center gap-3 p-3 rounded-lg bg-black/20 border border-gray-800/50">
                         <div className="p-2 rounded-lg bg-purple-500/10">
                           <Coins className="text-purple-400" size={18} />
@@ -272,12 +292,9 @@ const MilestoneTimeline = () => {
                     {/* Progress bar for current milestone */}
                     {status === 'current' && (
                       <div className="mt-4 pt-4 border-t border-gray-800/50">
-                        <div className="flex items-center justify-between text-xs mb-2">
-                          <span className="text-gray-400">Progress</span>
-                          <span className="text-indigo-400 font-semibold">
-                            {milestone.goodPeriods} / {milestone.requiredPeriods} periods
-                          </span>
-                        </div>
+                        <p className="text-xs text-gray-400 mb-2">
+                          Must average at or above target for {milestone.requiredPeriods} Good Hours
+                        </p>
                         <div className="relative w-full h-2.5 bg-gray-800 rounded-full overflow-hidden">
                           <motion.div
                             initial={{ width: 0 }}
@@ -287,19 +304,10 @@ const MilestoneTimeline = () => {
                           />
                           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-shimmer" />
                         </div>
-                        <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
-                          <TrendingUp size={12} />
-                          <span>Price must sustain above target for {milestone.requiredPeriods} periods</span>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Unlocked badge */}
-                    {status === 'unlocked' && (
-                      <div className="mt-4 pt-4 border-t border-emerald-500/20">
-                        <div className="flex items-center gap-2 text-xs text-emerald-400">
-                          <CheckCircle size={14} />
-                          <span>Successfully unlocked on-chain</span>
+                        <div className="mt-1.5 text-right">
+                          <span className="text-xs text-indigo-400 font-semibold">
+                            {milestone.goodPeriods}/{milestone.requiredPeriods} Good Hours
+                          </span>
                         </div>
                       </div>
                     )}
