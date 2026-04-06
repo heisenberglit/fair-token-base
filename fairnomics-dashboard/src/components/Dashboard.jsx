@@ -56,19 +56,6 @@ const formatDuration = (seconds) => {
   return `${hours} Hour${hours !== 1 ? 's' : ''} Cooldown`
 }
 
-const formatCooldownRemaining = (cooldownEndsAt) => {
-  if (!cooldownEndsAt) return null
-  const now = Date.now()
-  const remaining = cooldownEndsAt - now
-  if (remaining <= 0) return null
-  const hours = Math.floor(remaining / 3600000)
-  const minutes = Math.floor((remaining % 3600000) / 60000)
-  if (hours > 24) {
-    const days = Math.floor(hours / 24)
-    return `${days}d ${hours % 24}h remaining`
-  }
-  return `${hours}h ${minutes}m remaining`
-}
 
 const Dashboard = () => {
   const { currentMilestone, stats, milestones = [], config, loading, error } = useFairnomics()
@@ -82,11 +69,27 @@ const Dashboard = () => {
   // Cooldown info
   const waitRuleSeconds = config?.waitRule || 0
   const cooldownLabel = formatDuration(waitRuleSeconds)
-  const cooldownRemaining = formatCooldownRemaining(stats?.cooldownEndsAt)
-  const cooldownTotalDays = waitRuleSeconds > 0 ? Math.round(waitRuleSeconds / 86400) : 0
-  const daysSinceUnlock = stats?.cooldownEndsAt && waitRuleSeconds > 0
-    ? Math.max(0, Math.floor((Date.now() - (stats.cooldownEndsAt - waitRuleSeconds * 1000)) / 86400000))
+
+  // Format a duration in ms as "3h 29m" or "14d" or "45m"
+  const formatHM = (ms) => {
+    if (ms <= 0) return '0m'
+    const totalMins = Math.floor(ms / 60000)
+    const days = Math.floor(totalMins / 1440)
+    if (days >= 1) return `${days}d ${Math.floor((totalMins % 1440) / 60)}h`
+    const h = Math.floor(totalMins / 60)
+    const m = totalMins % 60
+    if (h === 0) return `${m}m`
+    return `${h}h ${m}m`
+  }
+
+  // Total cooldown as a label e.g. "4h" or "90d"
+  const cooldownTotalLabel = waitRuleSeconds > 0 ? formatHM(waitRuleSeconds * 1000) : null
+
+  // Time elapsed since last unlock
+  const elapsedMs = stats?.cooldownEndsAt && waitRuleSeconds > 0
+    ? Math.max(0, Date.now() - (stats.cooldownEndsAt - waitRuleSeconds * 1000))
     : 0
+  const elapsedLabel = elapsedMs > 0 ? formatHM(elapsedMs) : null
 
   // Supply info
   const maxSupply = stats?.totalSupply || TOTAL_SUPPLY
@@ -274,10 +277,10 @@ const Dashboard = () => {
           </div>
           <p className="text-gray-500 text-xs font-medium mb-1 uppercase tracking-wider">Cooldown Since Last Unlock</p>
           <p className="text-2xl font-bold">
-            {cooldownTotalDays > 0 ? (
+            {elapsedLabel && cooldownTotalLabel ? (
               <>
-                <span className="text-emerald-400">{daysSinceUnlock}</span>
-                <span className="text-white"> / {cooldownTotalDays} Days</span>
+                <span className="text-emerald-400">{elapsedLabel}</span>
+                <span className="text-white"> / {cooldownTotalLabel}</span>
               </>
             ) : (
               <span className="text-gray-500">—</span>
@@ -287,7 +290,7 @@ const Dashboard = () => {
       </div>
 
       {/* Vault Status Banners */}
-      {(hasPending || cooldownRemaining) && (
+      {hasPending && (
         <div className="space-y-3">
           {hasPending && !stats?.vaultFunded && (
             <motion.div
@@ -321,18 +324,6 @@ const Dashboard = () => {
                   Keeper will call releasePending() shortly to distribute milestone #{pendingMilestones.map(m => m.id).join(', #')}.
                 </p>
               </div>
-            </motion.div>
-          )}
-          {cooldownRemaining && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="card border-purple-500/30 bg-purple-500/5 flex items-center gap-3"
-            >
-              <Clock className="text-purple-400 flex-shrink-0" size={18} />
-              <p className="text-sm text-purple-300">
-                Cooldown active — next unlock eligible in <span className="font-semibold">{cooldownRemaining}</span>
-              </p>
             </motion.div>
           )}
         </div>
