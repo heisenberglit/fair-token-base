@@ -91,13 +91,21 @@ export async function fetchMilestones(vaultAddress) {
     try {
       const filter = vault.filters.MilestoneUnlocked()
       const events = await vault.queryFilter(filter)
-      for (const evt of events) {
+      await Promise.all(events.map(async (evt) => {
         const id = Number(evt.args.milestoneId)
-        unlockedEventMap[id] = {
-          unlockTimestamp: Number(evt.args.timestamp) * 1000, // convert to ms
-          unlockPrice: Number(evt.args.price),
+        // Try event arg timestamp first; fall back to block timestamp
+        let ts = Number(evt.args.timestamp || evt.args[2] || 0)
+        if (!ts || ts === 0) {
+          try {
+            const block = await provider.getBlock(evt.blockNumber)
+            ts = block?.timestamp || 0
+          } catch (_) {}
         }
-      }
+        unlockedEventMap[id] = {
+          unlockTimestamp: ts > 0 ? ts * 1000 : null,
+          unlockPrice: Number(evt.args.price || evt.args[1] || 0),
+        }
+      }))
     } catch (e) {
       console.warn('Could not fetch MilestoneUnlocked events:', e.message)
     }

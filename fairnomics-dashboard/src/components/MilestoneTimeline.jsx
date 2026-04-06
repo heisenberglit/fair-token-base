@@ -218,7 +218,7 @@ const MilestoneTimeline = () => {
                             />
                           )}
                         </div>
-                        <p className={`text-xs font-medium ${
+                        <div className={`text-xs font-medium ${
                           status === 'unlocked'
                             ? 'text-emerald-400'
                             : status === 'pending'
@@ -227,11 +227,18 @@ const MilestoneTimeline = () => {
                             ? 'text-indigo-400'
                             : 'text-gray-500'
                         }`}>
-                          {status === 'unlocked' && `Unlocked${unlockDate ? ` ${unlockDate}` : ''}`}
+                          {status === 'unlocked' && (
+                            <>
+                              <span>Unlocked</span>
+                              {unlockDate && (
+                                <span className="ml-2 text-emerald-300/70">{unlockDate}</span>
+                              )}
+                            </>
+                          )}
                           {status === 'pending' && 'Earned — Awaiting Distribution'}
                           {status === 'current' && 'In Progress'}
                           {status === 'locked' && 'Locked'}
-                        </p>
+                        </div>
                       </div>
                       <div className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
                         status === 'unlocked'
