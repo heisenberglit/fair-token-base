@@ -1,14 +1,11 @@
 import { motion } from 'framer-motion'
 import Dashboard from './components/Dashboard'
-import Navigation from './components/Navigation'
 import { FairnomicsProvider } from './contexts/FairnomicsContext'
 
 function App() {
   return (
     <FairnomicsProvider>
       <div className="min-h-screen" style={{ minHeight: '100vh' }}>
-        <Navigation />
-
         <main className="container mx-auto px-6 py-8" style={{ maxWidth: '1400px', margin: '0 auto' }}>
           <motion.div
             initial={{ opacity: 0, y: 20 }}

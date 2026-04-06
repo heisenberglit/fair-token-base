@@ -71,13 +71,10 @@ const formatCooldownRemaining = (cooldownEndsAt) => {
 }
 
 const Dashboard = () => {
-  const { currentMilestone, nextMilestone, stats, milestones = [], config, loading, refreshing, error, lastUpdated } = useFairnomics()
+  const { currentMilestone, stats, milestones = [], config, loading, error } = useFairnomics()
 
-  // Get required periods from config or milestone
-  const requiredPeriods = config?.requiredGoodPeriods || currentMilestone?.requiredPeriods || 2
+  const requiredPeriods = config?.requiredGoodPeriods || currentMilestone?.requiredPeriods || 360
 
-  // Get vault address from env
-  const vaultAddress = import.meta.env.VITE_VAULT_ADDRESS || '0x...'
   const fairTokenAddress = import.meta.env.VITE_FAIR_TOKEN_ADDRESS || null
   const rpcUrl = import.meta.env.VITE_BASE_RPC_URL || import.meta.env.VITE_RPC_URL || 'https://mainnet.base.org'
   const safeBalances = useSafeBalances(ALLOCATION_POOLS, fairTokenAddress, rpcUrl)
@@ -86,6 +83,14 @@ const Dashboard = () => {
   const waitRuleSeconds = config?.waitRule || 0
   const cooldownLabel = formatDuration(waitRuleSeconds)
   const cooldownRemaining = formatCooldownRemaining(stats?.cooldownEndsAt)
+  const cooldownTotalDays = waitRuleSeconds > 0 ? Math.round(waitRuleSeconds / 86400) : 0
+  const daysSinceUnlock = stats?.cooldownEndsAt && waitRuleSeconds > 0
+    ? Math.max(0, Math.floor((Date.now() - (stats.cooldownEndsAt - waitRuleSeconds * 1000)) / 86400000))
+    : 0
+
+  // Supply info
+  const maxSupply = stats?.totalSupply || TOTAL_SUPPLY
+  const circulatingSupply = stats?.totalUnlocked || null
 
   // Vault funding status
   const pendingMilestones = milestones.filter(m => m.unlocked && m.pending)
@@ -114,50 +119,20 @@ const Dashboard = () => {
     )
   }
 
-  const statCards = [
-    {
-      label: 'Current Price',
-      value: `$${stats?.currentPrice?.toFixed(6) || '0.000000'}`,
-      icon: TrendingUp,
-      color: 'from-emerald-500 to-green-600',
-      bgColor: 'bg-emerald-500/10',
-      borderColor: 'border-emerald-500/20',
-      textColor: 'text-emerald-400',
-    },
-    {
-      label: 'Current Target',
-      value: `$${currentMilestone?.priceTarget ? (currentMilestone.priceTarget / 1_000_000).toFixed(6) : '0.000000'}`,
-      icon: Target,
-      color: 'from-indigo-500 to-purple-600',
-      bgColor: 'bg-indigo-500/10',
-      borderColor: 'border-indigo-500/20',
-      textColor: 'text-indigo-400',
-    },
-    {
-      label: 'Good Hours',
-      value: `${stats?.daysAboveTarget || 0}/${requiredPeriods}`,
-      icon: Clock,
-      color: 'from-blue-500 to-cyan-600',
-      bgColor: 'bg-blue-500/10',
-      borderColor: 'border-blue-500/20',
-      textColor: 'text-blue-400',
-    },
-    {
-      label: 'Total Locked',
-      value: formatTokenAmount(stats?.totalLocked || 0),
-      icon: Lock,
-      color: 'from-gray-500 to-gray-600',
-      bgColor: 'bg-gray-500/10',
-      borderColor: 'border-gray-500/20',
-      textColor: 'text-gray-400',
-    },
-  ]
+  // Stat card data — split values for green/white formatting
+  const goodHours = stats?.daysAboveTarget || 0
+  const nextTargetPrice = currentMilestone?.priceTarget
+    ? (currentMilestone.priceTarget / 1_000_000).toFixed(4)
+    : '—'
+  const currentPriceDisplay = stats?.currentPrice
+    ? stats.currentPrice.toFixed(4)
+    : '—'
 
   const rules = [
     {
       icon: Target,
       title: '5% Max Unlock',
-      description: 'Maximum 50M FAIR (5% of supply) unlocks at each milestone',
+      description: 'Maximum 5% of supply per unlock',
       color: 'from-indigo-500 to-purple-600',
       bgColor: 'bg-indigo-500/10',
       borderColor: 'border-indigo-500/20',
@@ -167,7 +142,7 @@ const Dashboard = () => {
       icon: Clock,
       title: cooldownLabel,
       description: waitRuleSeconds > 0
-        ? `Minimum ${cooldownLabel.toLowerCase().replace(' cooldown', '')} between unlock events (${waitRuleSeconds.toLocaleString()}s on-chain)`
+        ? `Minimum ${cooldownLabel.toLowerCase().replace(' cooldown', '')} between unlock events`
         : 'No cooldown configured',
       color: 'from-purple-500 to-pink-600',
       bgColor: 'bg-purple-500/10',
@@ -176,8 +151,8 @@ const Dashboard = () => {
     },
     {
       icon: TrendingUp,
-      title: '1.5× Price Multiplier',
-      description: 'Each milestone requires price to be 1.5× the previous target',
+      title: 'Progressive Milestones (1.5x)',
+      description: 'Each milestone requires higher sustained levels than the previous one',
       color: 'from-emerald-500 to-green-600',
       bgColor: 'bg-emerald-500/10',
       borderColor: 'border-emerald-500/20',
@@ -185,8 +160,8 @@ const Dashboard = () => {
     },
     {
       icon: Shield,
-      title: `${requiredPeriods} Period Sustain`,
-      description: `Price must stay above target for ${requiredPeriods} consecutive periods`,
+      title: `${requiredPeriods} Good Hours`,
+      description: `Avg must be at or above milestone for ${requiredPeriods} hours`,
       color: 'from-blue-500 to-cyan-600',
       bgColor: 'bg-blue-500/10',
       borderColor: 'border-blue-500/20',
@@ -196,52 +171,119 @@ const Dashboard = () => {
 
   return (
     <div className="space-y-12">
-      {/* Fairnomics Header */}
+      {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="text-center mb-8"
+        className="text-center mb-8 space-y-2"
       >
-        <h1 className="text-5xl font-bold text-white mb-3">Fairnomics</h1>
-        <p className="text-lg text-gray-400 mb-4">
-          An open source transparent rules-based tokenomics system for long-term builders.
+        {/* FAIR logo — save fair-logo.png to fairnomics-dashboard/public/ */}
+        <img
+          src="/fair-logo.png"
+          alt="FAIR"
+          className="mx-auto w-24 h-24 mb-4"
+          onError={e => { e.target.style.display = 'none' }}
+        />
+        <p className="text-sm text-gray-300">
+          FAIR is the utility token of the{' '}
+          <a href="https://fairmark.net" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-300 underline underline-offset-2">Fairmark Network</a>
+          , a trust system for the AI age.
         </p>
-        {vaultAddress && vaultAddress !== '0x...' && (
+        <p className="text-sm text-gray-400">
+          FAIR is governed by <em>Fairnomics</em>, an open, transparent, rules-based tokenomics model for long-term builders and communities.
+        </p>
+        <p className="text-sm text-gray-400">
+          Founded 2025 by award-winning artist/game developer{' '}
+          <a href="https://benvu.com" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-300 underline underline-offset-2">Ben Vu</a>
+          {' '}(<em>Coraline/Battle Bears</em>)
+        </p>
+        <p className="text-sm text-gray-400">
+          🏆 Coinbase x World x402 AgentKit Hackathon Winner (
+          <a href="https://faircam.io" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-300 underline underline-offset-2">FairCam</a>
+          )
+        </p>
+        <p className="text-sm text-gray-500">
+          Built on Coinbase Base:{' '}
           <a
-            href={`https://basescan.org/address/${vaultAddress}`}
+            href="https://basescan.org/token/0xbC780134E48b2DFa8eDAC84E7bbe38e5af9DBc9C"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 text-sm text-indigo-400 hover:text-indigo-300 transition-colors"
+            className="text-indigo-400 hover:text-indigo-300 font-mono text-xs"
           >
-            Base Contract: {vaultAddress.slice(0, 6)}...{vaultAddress.slice(-4)}
-            <ExternalLink size={14} />
+            0xbC780134E48b2DFa8eDAC84E7bbe38e5af9DBc9C
           </a>
-        )}
+        </p>
+        <p className="text-sm text-gray-500">
+          Circulating Supply:{' '}
+          <span className="text-gray-300">
+            {circulatingSupply ? `${formatTokenAmount(circulatingSupply)} (${((circulatingSupply / maxSupply) * 100).toFixed(0)}%)` : '100M (10%)'}
+          </span>
+          {'    '}
+          Max Supply: <span className="text-gray-300">{formatTokenAmount(maxSupply)}</span>
+        </p>
       </motion.div>
 
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {statCards.map((stat, index) => {
-          const Icon = stat.icon
-          
-          return (
-            <motion.div
-              key={stat.label}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
-              className={`stat-card border ${stat.borderColor} group`}
-            >
-              <div className="flex items-center justify-between mb-4">
-                <div className={`p-2 rounded-lg ${stat.bgColor}`}>
-                  <Icon className={stat.textColor} size={20} />
-                </div>
-              </div>
-              <p className="text-gray-500 text-xs font-medium mb-1 uppercase tracking-wider">{stat.label}</p>
-              <p className="text-2xl font-bold text-white">{stat.value}</p>
-            </motion.div>
-          )
-        })}
+        {/* CURRENT USDC/FAIR */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0 }}
+          className="stat-card border border-emerald-500/20 group"
+        >
+          <div className="p-2 rounded-lg bg-emerald-500/10 w-fit mb-4">
+            <TrendingUp className="text-emerald-400" size={20} />
+          </div>
+          <p className="text-gray-500 text-xs font-medium mb-1 uppercase tracking-wider">Current USDC/FAIR</p>
+          <p className="text-2xl font-bold text-emerald-400">{currentPriceDisplay}</p>
+        </motion.div>
+
+        {/* NEXT MILESTONE */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+          className="stat-card border border-indigo-500/20 group"
+        >
+          <div className="p-2 rounded-lg bg-indigo-500/10 w-fit mb-4">
+            <Target className="text-indigo-400" size={20} />
+          </div>
+          <p className="text-gray-500 text-xs font-medium mb-1 uppercase tracking-wider">Next Milestone</p>
+          <p className="text-2xl font-bold text-white">{nextTargetPrice}</p>
+        </motion.div>
+
+        {/* GOOD HOURS ABOVE MILESTONE */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+          className="stat-card border border-blue-500/20 group"
+        >
+          <div className="p-2 rounded-lg bg-blue-500/10 w-fit mb-4">
+            <Clock className="text-blue-400" size={20} />
+          </div>
+          <p className="text-gray-500 text-xs font-medium mb-1 uppercase tracking-wider">Good Hours Above Milestone</p>
+          <p className="text-2xl font-bold">
+            <span className="text-emerald-400">{goodHours}</span>
+            <span className="text-white"> / {requiredPeriods} Hours</span>
+          </p>
+        </motion.div>
+
+        {/* COOLDOWN SINCE LAST UNLOCK */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
+          className="stat-card border border-purple-500/20 group"
+        >
+          <div className="p-2 rounded-lg bg-purple-500/10 w-fit mb-4">
+            <Lock className="text-purple-400" size={20} />
+          </div>
+          <p className="text-gray-500 text-xs font-medium mb-1 uppercase tracking-wider">Cooldown Since Last Unlock</p>
+          <p className="text-2xl font-bold">
+            {cooldownTotalDays > 0 ? (
+              <>
+                <span className="text-emerald-400">{daysSinceUnlock}</span>
+                <span className="text-white"> / {cooldownTotalDays} Days</span>
+              </>
+            ) : (
+              <span className="text-gray-500">—</span>
+            )}
+          </p>
+        </motion.div>
       </div>
 
       {/* Vault Status Banners */}
@@ -295,110 +337,6 @@ const Dashboard = () => {
           )}
         </div>
       )}
-
-      {/* Current & Next Milestone */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="card"
-        >
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-bold text-white">Current Milestone</h2>
-            {currentMilestone && (
-              <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                currentMilestone.unlocked 
-                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
-                  : 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
-              }`}>
-                {currentMilestone.unlocked ? 'Unlocked' : 'In Progress'}
-              </span>
-            )}
-          </div>
-          {currentMilestone ? (
-            <div className="space-y-5">
-              <div className="flex items-center justify-between pb-3 border-b border-gray-800">
-                <span className="text-gray-500 text-sm">Milestone</span>
-                <span className="text-white font-semibold">#{currentMilestone.id}</span>
-              </div>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-400 text-sm">Price Target</span>
-                  <span className="text-white font-semibold">${(currentMilestone.priceTarget / 1_000_000).toFixed(6)}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-400 text-sm">Unlock Amount</span>
-                  <span className="text-white font-semibold">{formatTokenAmount(currentMilestone.unlockAmount)}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-400 text-sm">Good Periods</span>
-                  <span className="text-white font-semibold">{currentMilestone.goodPeriods}/{currentMilestone.requiredPeriods}</span>
-                </div>
-              </div>
-              <div className="mt-6">
-                <div className="flex justify-between text-xs text-gray-500 mb-2">
-                  <span>Progress</span>
-                  <span>{Math.round((currentMilestone.goodPeriods / currentMilestone.requiredPeriods) * 100)}%</span>
-                </div>
-                <div className="w-full bg-gray-800 rounded-full h-2 overflow-hidden">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${(currentMilestone.goodPeriods / currentMilestone.requiredPeriods) * 100}%` }}
-                    transition={{ duration: 1, ease: "easeOut" }}
-                    className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-full"
-                  />
-                </div>
-              </div>
-            </div>
-          ) : (
-            <p className="text-gray-500 text-sm">No active milestone</p>
-          )}
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="card"
-        >
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-bold text-white">Next Milestone</h2>
-            {nextMilestone && (
-              <span className="px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
-                Upcoming
-              </span>
-            )}
-          </div>
-          {nextMilestone ? (
-            <div className="space-y-5">
-              <div className="flex items-center justify-between pb-3 border-b border-gray-800">
-                <span className="text-gray-500 text-sm">Milestone</span>
-                <span className="text-white font-semibold">#{nextMilestone.id}</span>
-              </div>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-400 text-sm">Price Target</span>
-                  <span className="text-white font-semibold">${(nextMilestone.priceTarget / 1_000_000).toFixed(6)}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-400 text-sm">Unlock Amount</span>
-                  <span className="text-white font-semibold">{formatTokenAmount(nextMilestone.unlockAmount)}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-400 text-sm">Required Periods</span>
-                  <span className="text-white font-semibold">{nextMilestone.requiredPeriods}</span>
-                </div>
-              </div>
-              <div className="mt-6 p-4 bg-indigo-500/5 rounded-lg border border-indigo-500/20">
-                <p className="text-sm text-gray-300 leading-relaxed">
-                  Price must sustain <span className="font-semibold text-indigo-400">1.5×</span> the previous target for <span className="font-semibold text-indigo-400">{requiredPeriods} periods</span> to unlock.
-                </p>
-              </div>
-            </div>
-          ) : (
-            <p className="text-gray-500 text-sm">All milestones completed!</p>
-          )}
-        </motion.div>
-      </div>
 
       {/* Unlock Rules */}
       <div>

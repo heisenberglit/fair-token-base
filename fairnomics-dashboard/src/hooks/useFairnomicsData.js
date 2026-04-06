@@ -73,7 +73,8 @@ export const useFairnomicsData = () => {
           stats: {
             ...stats,
             currentPrice: finalPrice / 1_000_000, // Convert to USD
-            daysAboveTarget: stats.goodPeriods || 0, // Use goodPeriods as daysAboveTarget
+            daysAboveTarget: stats.goodPeriods || 0,
+            totalSupply: stats.totalSupply || null,
           },
           config: config || {
             requiredGoodPeriods: milestonesData.currentMilestone?.requiredPeriods || 2,

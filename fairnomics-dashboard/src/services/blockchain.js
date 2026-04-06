@@ -353,6 +353,7 @@ export async function fetchVaultStats(vaultAddress, fairTokenAddress) {
     return {
       totalLocked: vaultBalance,
       totalUnlocked: totalUnlocked || 0,
+      totalSupply: totalSupply ? Number(totalSupply) : null,
       currentPrice: currentPrice, // Keep in oracle format (will convert in component)
       goodPeriods,
       vaultFunded,
