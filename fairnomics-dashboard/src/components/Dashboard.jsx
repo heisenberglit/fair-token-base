@@ -180,49 +180,43 @@ const Dashboard = () => {
         animate={{ opacity: 1, y: 0 }}
         className="text-center mb-8 space-y-2"
       >
-        {/* FAIR logo — save fair-logo.png to fairnomics-dashboard/public/ */}
         <img
           src="/fair-logo.png"
           alt="FAIR"
           className="mx-auto w-24 h-24 mb-4"
           onError={e => { e.target.style.display = 'none' }}
         />
-        <p className="text-sm text-gray-300">
+        <p className="text-base text-white leading-relaxed">
           FAIR is the utility token of the{' '}
-          <a href="https://fairmark.net" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-300 underline underline-offset-2">Fairmark Network</a>
-          , a trust system for the AI age.
+          <a href="https://fairmark.net" target="_blank" rel="noopener noreferrer" className="text-white underline underline-offset-2 hover:opacity-75">Fairmark Network</a>
+          , a trust system for the AI age. FAIR is governed by <em>Fairnomics</em>, an open, transparent, rules-based tokenomics model for long-term builders.
         </p>
-        <p className="text-sm text-gray-400">
-          FAIR is governed by <em>Fairnomics</em>, an open, transparent, rules-based tokenomics model for long-term builders and communities.
-        </p>
-        <p className="text-sm text-gray-400">
+        <p className="text-base text-white leading-relaxed">
           Founded 2025 by award-winning artist/game developer{' '}
-          <a href="https://benvu.com" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-300 underline underline-offset-2">Ben Vu</a>
-          {' '}(<em>Coraline/Battle Bears</em>)
-        </p>
-        <p className="text-sm text-gray-400">
-          🏆 Coinbase x World x402 AgentKit Hackathon Winner (
-          <a href="https://faircam.io" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-300 underline underline-offset-2">FairCam</a>
+          <a href="https://benvu.com" target="_blank" rel="noopener noreferrer" className="text-white underline underline-offset-2 hover:opacity-75">Ben Vu</a>
+          {' '}(<em>Coraline/Battle Bears</em>)<br />
+          🏆 Coinbase x World x402 Hackathon Winner (
+          <a href="https://faircam.io" target="_blank" rel="noopener noreferrer" className="text-white underline underline-offset-2 hover:opacity-75">FairCam</a>
           )
         </p>
-        <p className="text-sm text-gray-500">
+        <p className="text-base text-white leading-relaxed">
           Built on Coinbase Base:{' '}
           <a
             href="https://basescan.org/token/0xbC780134E48b2DFa8eDAC84E7bbe38e5af9DBc9C"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-indigo-400 hover:text-indigo-300 font-mono text-xs"
+            className="text-white underline underline-offset-2 hover:opacity-75 font-mono text-sm"
           >
             0xbC780134E48b2DFa8eDAC84E7bbe38e5af9DBc9C
           </a>
-        </p>
-        <p className="text-sm text-gray-500">
-          Circulating Supply:{' '}
-          <span className="text-gray-300">
-            {circulatingSupply ? `${formatTokenAmount(circulatingSupply)} (${((circulatingSupply / maxSupply) * 100).toFixed(0)}%)` : '100M (10%)'}
-          </span>
-          {'    '}
-          Max Supply: <span className="text-gray-300">{formatTokenAmount(maxSupply)}</span>
+          <br />
+          Circulating:{' '}
+          {circulatingSupply
+            ? `${formatTokenAmount(circulatingSupply)} (${((circulatingSupply / maxSupply) * 100).toFixed(0)}%)`
+            : '—'
+          }
+          {'  ·  '}
+          Max Supply: {formatTokenAmount(maxSupply)}
         </p>
       </motion.div>
 
