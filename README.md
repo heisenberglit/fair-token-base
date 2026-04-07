@@ -1,47 +1,64 @@
-# FAIR Token - 10B Fairnomics System
+# FAIR Token — Fairnomics System
 
-FAIR token with milestone-based unlock system on Base blockchain.
+FAIR is the utility token of the [Fairmark Network](https://fairmark.net), a trust system for the AI age. FAIR is governed by *Fairnomics*, an open, transparent, rules-based tokenomics model for long-term builders. Built on Coinbase Base.
+
+Contract: [0xbC780134E48b2DFa8eDAC84E7bbe38e5af9DBc9C](https://basescan.org/token/0xbC780134E48b2DFa8eDAC84E7bbe38e5af9DBc9C)
 
 ## 📊 Tokenomics
 
 | Parameter | Value |
 |-----------|-------|
-| **Total Supply** | 10,000,000,000 FAIR |
-| **TGE Distribution** | 1,000,000,000 (10%) |
-| **Locked Supply** | 9,000,000,000 (90%) |
+| **Total Supply** | 1,000,000,000 FAIR (1B) |
 | **Milestones** | 18 |
-| **Per Milestone** | 500,000,000 (5%) |
-| **Start Price** | $0.000010 |
+| **Per Milestone** | ~47.2M FAIR (1/18 of locked supply) |
+| **Start Price** | 0.000002 USDC |
+| **Price Multiplier** | 1.5× per milestone |
+| **Good Hours Required** | 360 (TWAP must hold above target) |
+| **Cooldown Between Unlocks** | 90 days |
+
+## 🏦 Token Allocation
+
+| Pool | Amount | % |
+|------|--------|---|
+| **Treasury** | 850,000,000 FAIR | 85% |
+| **Reserve** | 50,000,000 FAIR | 5% |
+| **Team** | 50,000,000 FAIR | 5% |
+| **Seed Liquidity** | 30,000,000 FAIR | 3% |
+| **LP & Buffer** | 20,000,000 FAIR | 2% |
+
+The Treasury holds the full locked supply. Tokens are released to the vault in tranches (staged funding model) — the Treasury Safe acts as the human circuit breaker.
+
+## 🔒 Unlock Rules
+
+1. **360 Good Hours** — 1-hour TWAP must stay at or above the milestone price target for 360 cumulative hours
+2. **90-Day Cooldown** — Minimum 90 days between any two unlock events
+3. **1.5× Price Multiplier** — Each milestone target is 1.5× the previous one
+4. **Sequential** — Milestones must unlock in order; no skipping
+5. **No partial payments** — If vault is underfunded at unlock time, milestone is marked pending and paid in full once the Safe refills the vault
 
 ## 🏗️ Project Structure
 
 ```
 contracts/
-├── FAIR.sol              # Production token (90-day cooldown, 360 hours)
-├── FAIRTestnet.sol       # Testnet token (10-min cooldown, 10 periods)
-├── AerodromeTWAPOracle.sol  # Production price oracle
-└── MockOracle.sol        # Testing oracle
+├── FAIRVault.sol              # Immutable milestone-based escrow vault
+├── AerodromeTWAPOracle.sol    # 1-hour TWAP oracle (Aerodrome Slipstream)
+└── MockOracle.sol             # Testing oracle
 
 scripts/
-├── local/                # Local Hardhat fork testing (FREE)
-│   ├── deploy.js
-│   ├── test.js
-│   └── README.md
-├── testnet/              # Base Sepolia testnet
-│   ├── deploy.js
-│   ├── test.js
-│   └── README.md
-├── mainnet/              # Base mainnet (PRODUCTION)
-│   ├── deploy.js
-│   ├── deploy-twap.js
-│   └── README.md
-├── keeper/               # Keeper bot
-│   ├── keeper.js
-│   └── README.md
-└── shared/               # Shared utilities
+├── mainnet/                   # Base mainnet deployment & management
+│   ├── deployment/
+│   │   └── deploy-vault.js
+│   └── pool-management/
+│       ├── increase-pool-cardinality.js
+│       └── build-pool-history.js
+├── keeper/                    # Keeper bot (calls tryUnlock every hour)
+│   └── keeper.js
+└── shared/                    # Shared utilities
     ├── config.js
-    ├── provider.js
-    └── artifacts.js
+    ├── artifacts.js
+    └── provider.js
+
+fairnomics-dashboard/          # React Vite dashboard (read-only blockchain UI)
 ```
 
 ## 🚀 Quick Start
@@ -58,90 +75,77 @@ npm install
 npx hardhat compile
 ```
 
-### 3. Local Testing (FREE)
-
-```bash
-# Terminal 1: Start Hardhat fork
-npx hardhat node --fork https://mainnet.base.org
-
-# Terminal 2: Deploy and test
-node scripts/local/deploy.js
-node scripts/local/test.js --fast-forward
-```
-
-### 4. Testnet Deployment (Base Sepolia)
-
-```bash
-# Set up .env
-echo "PRIVATE_KEY=your_key" >> .env
-echo "BASE_SEPOLIA_RPC_URL=https://sepolia.base.org" >> .env
-
-# Deploy
-node scripts/testnet/deploy.js
-node scripts/testnet/test.js
-```
-
-### 5. Mainnet Deployment (Base)
-
-```bash
-# Set up .env with real addresses
-# See scripts/mainnet/README.md for full checklist
-
-node scripts/mainnet/deploy.js
-```
-
-## 📋 Environment Configuration
+### 3. Configure Environment
 
 Create a `.env` file:
 
 ```bash
-# Network RPC URLs
-BASE_SEPOLIA_RPC_URL=https://sepolia.base.org
-BASE_MAINNET_RPC_URL=https://mainnet.base.org
-
-# Deployer private key
+# Deployer / keeper wallet
 PRIVATE_KEY=your_private_key
+KEEPER_PRIVATE_KEY=your_keeper_key   # can be same as PRIVATE_KEY
 
-# Pool wallet addresses (required for mainnet)
-TREASURY_WALLET=0x...
-GROWTH_WALLET=0x...
-LIQUIDITY_WALLET=0x...
-TEAM_WALLET=0x...
+# Base mainnet RPC (Alchemy recommended)
+RPC_URL=https://base-mainnet.g.alchemy.com/v2/YOUR_KEY
 
-# TGE Timestamp (Jan 1, 2026 00:00 GMT)
-TGE_TIMESTAMP=1735689600
+# Deployed addresses
+VAULT_ADDRESS=0x354753c5f8225F6688c94f00336fDa687643f183
+TWAP_ORACLE_ADDRESS=0x...
 
-# Keeper (optional)
-KEEPER_PRIVATE_KEY=your_keeper_key
+# Total FAIR to be distributed across all 18 milestones
+VAULT_DEPOSIT_AMOUNT=850000000
 ```
 
-## 🔧 Testing Environments
+### 4. Deploy Vault
 
-| Environment | Cost | Cooldown | Good Periods | Use Case |
-|-------------|------|----------|--------------|----------|
-| **Local** | FREE | 10 min | 10 | Development |
-| **Testnet** | Free ETH | 10 min | 10 | Pre-production |
-| **Mainnet** | ~$50 | 90 days | 360 hours | Production |
+```bash
+node scripts/mainnet/deployment/deploy-vault.js
+```
 
-## 📖 Documentation
+### 5. Run Keeper Bot (local)
 
-- **Local Testing**: [`scripts/local/README.md`](scripts/local/README.md)
-- **Testnet Guide**: [`scripts/testnet/README.md`](scripts/testnet/README.md)
-- **Mainnet Guide**: [`scripts/mainnet/README.md`](scripts/mainnet/README.md)
-- **Keeper Bot**: [`scripts/keeper/README.md`](scripts/keeper/README.md)
-- **Full Guide**: [`FAIR_10B_COMPLETE_GUIDE.md`](FAIR_10B_COMPLETE_GUIDE.md)
+```bash
+node scripts/keeper/keeper.js mainnet
+```
+
+## 🤖 Keeper Bot
+
+The keeper is a permissionless bot that calls `tryUnlock()` every hour. It:
+- Records good periods when TWAP is above target
+- Triggers milestone unlock when all conditions are met
+- Calls `releasePending()` if a milestone was earned while vault was underfunded
+
+### Deploy on Railway
+
+1. Push repo to GitHub
+2. New Railway project → Deploy from GitHub
+3. Set environment variables in Railway dashboard:
+   - `PRIVATE_KEY`
+   - `VAULT_ADDRESS`
+   - `RPC_URL`
+4. Railway runs `node scripts/keeper/keeper.js mainnet` continuously via `Procfile`
+
+## 📈 Staged Funding Model
+
+The Treasury Safe holds the full FAIR supply. Tokens are pre-loaded to the vault in tranches before each milestone:
+
+1. Safe sends FAIR to vault (e.g. 3 milestones ahead)
+2. Vault `initialize(totalAmount)` is called once to set `milestoneUnlockAmount`
+3. When a milestone unlocks, vault distributes `milestoneUnlockAmount` to recipient pools
+4. If vault balance is insufficient at unlock time → milestone marked **pending**, no partial payment, full amount paid once Safe refills vault
+
+The Safe never sends tokens directly to recipients — the vault enforces all unlock rules.
 
 ## 🔐 Security
 
-- **No upgradeability** - Contracts are immutable
-- **Immutable pool addresses** - Set at deployment
-- **No owner withdrawals** - Locked tokens cannot be retrieved
-- **TWAP oracle** - Manipulation resistant pricing
+- **Immutable** — No upgradeability, no admin override, no emergency withdrawal
+- **Trustless** — All unlock conditions enforced on-chain
+- **TWAP oracle** — 1-hour Aerodrome Slipstream TWAP, manipulation resistant
+- **Sequential** — Strict milestone ordering enforced in contract
+- **No partial payments** — Either full amount releases or nothing (pending mechanism)
 
-## 📞 Support
+## 🌐 Links
 
-For issues:
-1. Check environment-specific README
-2. Verify contract addresses
-3. Check wallet balances
-4. Contact User with transaction hashes
+- Dashboard: fairnomics-dashboard (React Vite, reads live chain state)
+- Fairmark Network: [fairmark.net](https://fairmark.net)
+- FairCam: [faircam.io](https://faircam.io)
+- BaseScan: [0xbC780134...](https://basescan.org/token/0xbC780134E48b2DFa8eDAC84E7bbe38e5af9DBc9C)
