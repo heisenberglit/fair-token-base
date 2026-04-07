@@ -23,10 +23,11 @@ Contract: [0xbC780134E48b2DFa8eDAC84E7bbe38e5af9DBc9C](https://basescan.org/toke
 | **CONTRACT VAULT** | 850,000,000 FAIR | 85% |
 | **Seed Liquidity** | 150,000,000 FAIR | 15% |
 | **Treasury** | 500,000,000 FAIR | 50% |
+| **Growth** | 20,000,000 FAIR | 20% |
 | **Reserve** | 50,000,000 FAIR | 5% |
 | **Team** | 100,000,000 FAIR | 10% |
 
-The Fairnomics Contract Vault holds the full locked supply. 
+Contract Vault holds the full locked supply. Milestone unlocks trigger sends to Pool Safes. 
 
 ## 🔒 Unlock Rules
 
