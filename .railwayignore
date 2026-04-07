@@ -1,0 +1,8 @@
+fairnomics-dashboard/
+scripts/mainnet/
+scripts/testnet/
+artifacts/
+cache/
+docs/
+*.log
+scripts/keeper/logs/

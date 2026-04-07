@@ -1,4 +1,8 @@
 {
+  "scripts": {
+    "start": "node scripts/keeper/keeper.js mainnet",
+    "keeper": "node scripts/keeper/keeper.js mainnet"
+  },
   "devDependencies": {
     "@types/node": "^22.19.1",
     "hardhat": "^3.1.2",
