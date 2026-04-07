@@ -10,11 +10,11 @@ import { ERC20_ABI } from '../services/contracts'
 // Pool definitions — update safeAddress for each pool when known
 // Ordered by allocation size (largest first)
 const ALLOCATION_POOLS = [
-  { label: 'Community Reserve', pct: 85, tokens: '850M FAIR', color: 'from-blue-500 to-cyan-600', safeAddress: null },
-  { label: 'Growth & Memetics', pct: 5,  tokens: '50M FAIR',  color: 'from-emerald-500 to-green-600', safeAddress: null },
-  { label: 'Team Pool',         pct: 5,  tokens: '50M FAIR',  color: 'from-purple-500 to-pink-600', safeAddress: null },
-  { label: 'Seed Sale',         pct: 3,  tokens: '30M FAIR',  color: 'from-indigo-500 to-purple-600', safeAddress: null },
-  { label: 'LP & Buffer',       pct: 2,  tokens: '20M FAIR',  color: 'from-gray-500 to-gray-600', safeAddress: null },
+  { label: 'Treasury',         pct: 85, tokens: '850M FAIR', color: 'from-blue-500 to-cyan-600',     safeAddress: null },
+  { label: 'Reserve',          pct: 5,  tokens: '50M FAIR',  color: 'from-emerald-500 to-green-600', safeAddress: null },
+  { label: 'Team',             pct: 5,  tokens: '50M FAIR',  color: 'from-purple-500 to-pink-600',   safeAddress: null },
+  { label: 'Seed Liquidity',   pct: 3,  tokens: '30M FAIR',  color: 'from-indigo-500 to-purple-600', safeAddress: null },
+  { label: 'LP & Buffer',      pct: 2,  tokens: '20M FAIR',  color: 'from-gray-500 to-gray-600',     safeAddress: null },
 ]
 
 const TOTAL_SUPPLY = 1_000_000_000 // 1B FAIR
@@ -363,12 +363,7 @@ const Dashboard = () => {
               <Shield className="text-indigo-400" size={24} />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-white mb-2">Trustless & Transparent</h3>
-              <p className="text-sm text-gray-400 leading-relaxed">
-                All unlock conditions are enforced on-chain. No human discretion. 
-                The community wins before insiders do. Every milestone unlock is 
-                automatic and verifiable on Base blockchain.
-              </p>
+              <h3 className="text-lg font-semibold text-white">Trustless & Transparent</h3>
             </div>
           </div>
         </motion.div>
@@ -382,10 +377,6 @@ const Dashboard = () => {
         {stats?.totalLocked > 0 && (
           <p className="text-sm text-gray-400 mb-6">
             {formatTokenAmount(stats.totalLocked)} FAIR currently locked in vault
-            {' '}
-            <span className="text-gray-500">
-              ({((stats.totalLocked / TOTAL_SUPPLY) * 100).toFixed(1)}% of {formatTokenAmount(TOTAL_SUPPLY)} supply)
-            </span>
           </p>
         )}
         <div className="card">
