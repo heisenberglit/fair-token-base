@@ -11,7 +11,7 @@ Contract: [0xbC780134E48b2DFa8eDAC84E7bbe38e5af9DBc9C](https://basescan.org/toke
 | **Total Supply** | 1,000,000,000 FAIR (1B) |
 | **Milestones** | 18 |
 | **Per Milestone** | ~47.2M FAIR (1/18 of locked supply) |
-| **Start Price** | 0.000002 USDC |
+| **Start Price** | 0.0002 USDC |
 | **Price Multiplier** | 1.5× per milestone |
 | **Good Hours Required** | 360 (TWAP must hold above target) |
 | **Cooldown Between Unlocks** | 90 days |
@@ -20,13 +20,13 @@ Contract: [0xbC780134E48b2DFa8eDAC84E7bbe38e5af9DBc9C](https://basescan.org/toke
 
 | Pool | Amount | % |
 |------|--------|---|
-| **Treasury** | 850,000,000 FAIR | 85% |
+| **CONTRACT VAULT** | 850,000,000 FAIR | 85% |
+| **Seed Liquidity** | 150,000,000 FAIR | 15% |
+| **Treasury** | 500,000,000 FAIR | 50% |
 | **Reserve** | 50,000,000 FAIR | 5% |
-| **Team** | 50,000,000 FAIR | 5% |
-| **Seed Liquidity** | 30,000,000 FAIR | 3% |
-| **LP & Buffer** | 20,000,000 FAIR | 2% |
+| **Team** | 100,000,000 FAIR | 10% |
 
-The Treasury holds the full locked supply. Tokens are released to the vault in tranches (staged funding model) — the Treasury Safe acts as the human circuit breaker.
+The Fairnomics Contract Vault holds the full locked supply. 
 
 ## 🔒 Unlock Rules
 
