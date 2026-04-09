@@ -92,11 +92,12 @@ const Dashboard = () => {
   const elapsedLabel = elapsedMs > 0 ? formatHM(Math.min(elapsedMs, waitRuleSeconds * 1000)) : null
 
   // Supply info — circulating = Max Supply - 850M vault allocation + already distributed
+  // All values in raw wei (1e18) to match totalSupply from contract
   const maxSupply = stats?.totalSupply || TOTAL_SUPPLY
-  const VAULT_ALLOCATION = 850_000_000
+  const VAULT_ALLOCATION_RAW = 850_000_000 * 1e18
   const milestonesUnlocked = stats?.milestonesUnlocked || 0
   const perMilestone = stats?.perMilestone || 0
-  const circulatingSupply = maxSupply - VAULT_ALLOCATION + (milestonesUnlocked * perMilestone)
+  const circulatingSupply = maxSupply - VAULT_ALLOCATION_RAW + (milestonesUnlocked * perMilestone)
 
   // Vault funding status
   const pendingMilestones = milestones.filter(m => m.unlocked && m.pending)
