@@ -386,7 +386,7 @@ const Dashboard = () => {
         </div>
         {stats?.totalLocked > 0 && (
           <p className="text-sm text-gray-400 mb-6">
-            {formatTokenAmount(stats.totalLocked)} FAIR currently locked in{' '}
+            {formatTokenAmount(stats.totalLocked)} currently locked in{' '}
             <a
               href="https://basescan.org/address/0x59798bC67c3C09DaEF2e8d82d32E9723105308Bb"
               target="_blank"
@@ -437,7 +437,7 @@ const Dashboard = () => {
                       )}
                       {safeBalance !== undefined && (
                         <span className="text-xs text-gray-500 ml-1">
-                          (Safe Balance: {formatTokenAmount(safeBalance)} FAIR)
+                          (Safe Balance: {formatTokenAmount(safeBalance)})
                         </span>
                       )}
                     </div>
