@@ -7,14 +7,13 @@ import { formatTokenAmount } from '../utils/formatToken'
 import MilestoneTimeline from './MilestoneTimeline'
 import { ERC20_ABI } from '../services/contracts'
 
-// Pool definitions — update safeAddress for each pool when known
-// Ordered by allocation size (largest first)
+// Pool definitions — allocation amounts from contract ratios (850M vault / 150M seed liquidity = 1B total)
 const ALLOCATION_POOLS = [
-  { label: 'Treasury',         pct: 85, tokens: '850M FAIR', color: 'from-blue-500 to-cyan-600',     safeAddress: null },
-  { label: 'Reserve',          pct: 5,  tokens: '50M FAIR',  color: 'from-emerald-500 to-green-600', safeAddress: null },
-  { label: 'Team',             pct: 5,  tokens: '50M FAIR',  color: 'from-purple-500 to-pink-600',   safeAddress: null },
-  { label: 'Seed Liquidity',   pct: 3,  tokens: '30M FAIR',  color: 'from-indigo-500 to-purple-600', safeAddress: null },
-  { label: 'LP & Buffer',      pct: 2,  tokens: '20M FAIR',  color: 'from-gray-500 to-gray-600',     safeAddress: null },
+  { label: 'Treasury',       pct: 50, totalTokens: 500_000_000, tokens: '500M FAIR', color: 'from-blue-500 to-cyan-600',     safeAddress: '0x62c944758F34D598CC817F2bfB7205b467Cf5C3b' },
+  { label: 'Growth',         pct: 20, totalTokens: 200_000_000, tokens: '200M FAIR', color: 'from-emerald-500 to-green-600', safeAddress: '0x8FeAD17f278B4d7b15138a742bb997f1163Ccb20' },
+  { label: 'Seed Liquidity', pct: 15, totalTokens: 150_000_000, tokens: '150M FAIR', color: 'from-indigo-500 to-purple-600', safeAddress: null },
+  { label: 'Team',           pct: 10, totalTokens: 100_000_000, tokens: '100M FAIR', color: 'from-purple-500 to-pink-600',   safeAddress: '0x6E542b2283242D1B896698c8Be0292480bc3e1c3' },
+  { label: 'Reserve',        pct:  5, totalTokens:  50_000_000, tokens:  '50M FAIR', color: 'from-gray-500 to-gray-600',     safeAddress: '0x70Cf1c0469ddB9bE9319c152232FFac3B584D09A' },
 ]
 
 const TOTAL_SUPPLY = 1_000_000_000 // 1B FAIR
@@ -389,6 +388,12 @@ const Dashboard = () => {
             {ALLOCATION_POOLS.map((pool, index) => {
               const safeBalance = safeBalances[pool.label]
               const hasSafe = !!pool.safeAddress
+              const balancePct = safeBalance !== undefined
+                ? Math.min(100, (safeBalance / pool.totalTokens) * 100)
+                : pool.pct
+              const balancePctDisplay = safeBalance !== undefined
+                ? balancePct.toFixed(1)
+                : pool.pct
               return (
                 <motion.div
                   key={pool.label}
@@ -414,19 +419,19 @@ const Dashboard = () => {
                       )}
                       {safeBalance !== undefined && (
                         <span className="text-xs text-gray-500 ml-1">
-                          ({formatTokenAmount(safeBalance)} in Safe)
+                          (Safe Balance: {formatTokenAmount(safeBalance)} FAIR)
                         </span>
                       )}
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className="text-xs text-gray-500">{pool.pct}%</span>
+                      <span className="text-xs text-gray-500">{balancePctDisplay}%</span>
                       <span className="text-sm font-semibold text-white">{pool.tokens}</span>
                     </div>
                   </div>
                   <div className="w-full bg-gray-800 rounded-full h-2 overflow-hidden">
                     <motion.div
                       initial={{ width: 0 }}
-                      animate={{ width: `${pool.pct}%` }}
+                      animate={{ width: `${balancePct}%` }}
                       transition={{ duration: 0.8, delay: index * 0.1 }}
                       className={`h-full bg-gradient-to-r ${pool.color} rounded-full`}
                     />
