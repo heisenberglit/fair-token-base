@@ -84,8 +84,8 @@ contract FAIRVault is Ownable {
     /// @notice Minimum time between good period recordings (configurable: 1 hour prod, 1 min test)
     uint256 public immutable PERIOD_INTERVAL;
 
-    /// @notice Starting price target for milestone 1 ($0.000030 in 1e6 units)
-    uint256 public constant START_PRICE = 30;
+    /// @notice Starting price target for milestone 1 ($0.000200 in 1e6 units)
+    uint256 public constant START_PRICE = 200;
 
     /// @notice Minimum liquidity floor for good period qualification (0 = disabled, for future use)
     /// @dev Reserved for future enhancement: require minimum pool liquidity to count as good period
@@ -219,7 +219,7 @@ contract FAIRVault is Ownable {
         MIN_LIQUIDITY_FLOOR = _minLiquidityFloor;
 
         lastUnlockTime = _tgeTimestamp;
-        lastUnlockPrice = (START_PRICE * PRICE_MULTIPLIER_DEN) / PRICE_MULTIPLIER_NUM; // 30 * 10 / 15 = 20
+        lastUnlockPrice = (START_PRICE * PRICE_MULTIPLIER_DEN) / PRICE_MULTIPLIER_NUM; // 200 * 10 / 15 = 133
 
         // Initialize price ladder (1.5x per milestone)
         uint256 price = START_PRICE;
