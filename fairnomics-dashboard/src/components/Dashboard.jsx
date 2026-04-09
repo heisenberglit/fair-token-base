@@ -91,12 +91,12 @@ const Dashboard = () => {
   const cooldownComplete = elapsedMs >= waitRuleSeconds * 1000
   const elapsedLabel = elapsedMs > 0 ? formatHM(Math.min(elapsedMs, waitRuleSeconds * 1000)) : null
 
-  // Supply info
+  // Supply info — circulating = Max Supply - 850M vault allocation + already distributed
   const maxSupply = stats?.totalSupply || TOTAL_SUPPLY
-  const treasurySafeBalance = safeBalances['Treasury'] || 0
-  const circulatingSupply = stats?.totalSupply
-    ? stats.totalSupply - (stats.vaultBalance || 0) - treasurySafeBalance
-    : null
+  const VAULT_ALLOCATION = 850_000_000
+  const milestonesUnlocked = stats?.milestonesUnlocked || 0
+  const perMilestone = stats?.perMilestone || 0
+  const circulatingSupply = maxSupply - VAULT_ALLOCATION + (milestonesUnlocked * perMilestone)
 
   // Vault funding status
   const pendingMilestones = milestones.filter(m => m.unlocked && m.pending)
@@ -216,10 +216,7 @@ const Dashboard = () => {
           </a>
           <br />
           Circulating:{' '}
-          {circulatingSupply
-            ? `${formatTokenAmount(circulatingSupply)} (${((circulatingSupply / maxSupply) * 100).toFixed(0)}%)`
-            : '—'
-          }
+          {`${formatTokenAmount(circulatingSupply)} (${((circulatingSupply / maxSupply) * 100).toFixed(0)}%)`}
           {'  ·  '}
           Max Supply: {formatTokenAmount(maxSupply)}
         </p>
