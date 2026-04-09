@@ -89,7 +89,8 @@ const Dashboard = () => {
   const elapsedMs = stats?.cooldownEndsAt && waitRuleSeconds > 0
     ? Math.max(0, Date.now() - (stats.cooldownEndsAt - waitRuleSeconds * 1000))
     : 0
-  const elapsedLabel = elapsedMs > 0 ? formatHM(elapsedMs) : null
+  const cooldownComplete = elapsedMs >= waitRuleSeconds * 1000
+  const elapsedLabel = elapsedMs > 0 ? formatHM(Math.min(elapsedMs, waitRuleSeconds * 1000)) : null
 
   // Supply info
   const maxSupply = stats?.totalSupply || TOTAL_SUPPLY
@@ -271,7 +272,9 @@ const Dashboard = () => {
           </div>
           <p className="text-gray-500 text-xs font-medium mb-1 uppercase tracking-wider">Cooldown Since Last Unlock</p>
           <p className="text-2xl font-bold">
-            {elapsedLabel && cooldownTotalLabel ? (
+            {cooldownComplete ? (
+              <span className="text-emerald-400">Ready</span>
+            ) : elapsedLabel && cooldownTotalLabel ? (
               <>
                 <span className="text-emerald-400">{elapsedLabel}</span>
                 <span className="text-white"> / {cooldownTotalLabel}</span>
