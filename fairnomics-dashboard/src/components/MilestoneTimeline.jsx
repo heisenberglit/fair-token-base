@@ -273,10 +273,10 @@ const MilestoneTimeline = () => {
                           </p>
                           <p className="text-sm font-bold text-white">
                             {status === 'unlocked' && milestone.unlockPrice !== null
-                              ? `${(milestone.unlockPrice / 1_000_000).toFixed(6)} USDC`
+                              ? `${(milestone.unlockPrice / 1_000_000).toFixed(6)}`
                               : status === 'locked'
-                              ? <span>{(milestone.priceTarget / 1_000_000).toFixed(6)} USDC<span className="text-gray-500 text-xs ml-0.5">*</span></span>
-                              : `${(milestone.priceTarget / 1_000_000).toFixed(6)} USDC`
+                              ? <span>{(milestone.priceTarget / 1_000_000).toFixed(6)}<span className="text-gray-500 text-xs ml-0.5">*</span></span>
+                              : `${(milestone.priceTarget / 1_000_000).toFixed(6)}`
                             }
                           </p>
                         </div>
