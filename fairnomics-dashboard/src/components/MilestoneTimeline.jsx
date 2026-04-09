@@ -275,7 +275,7 @@ const MilestoneTimeline = () => {
                             {status === 'unlocked' && milestone.unlockPrice !== null
                               ? `${(milestone.unlockPrice / 1_000_000).toFixed(6)} USDC`
                               : status === 'locked'
-                              ? 'TBD'
+                              ? <span>{(milestone.priceTarget / 1_000_000).toFixed(6)} USDC<span className="text-gray-500 text-xs ml-0.5">*</span></span>
                               : `${(milestone.priceTarget / 1_000_000).toFixed(6)} USDC`
                             }
                           </p>
@@ -335,6 +335,11 @@ const MilestoneTimeline = () => {
           })}
         </div>
       </div>
+
+      {/* Footnote */}
+      <p className="text-xs text-gray-600 mt-4">
+        * Estimated price target. Locked milestone targets are recalculated at each unlock — the actual target will be set to 1.5× the TWAP price at the time the previous milestone unlocks.
+      </p>
     </div>
   )
 }

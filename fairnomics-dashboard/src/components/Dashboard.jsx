@@ -58,7 +58,7 @@ const formatDuration = (seconds) => {
 
 
 const Dashboard = () => {
-  const { currentMilestone, stats, milestones = [], config, loading, error } = useFairnomics()
+  const { currentMilestone, nextMilestone, stats, milestones = [], config, loading, error } = useFairnomics()
 
   const requiredPeriods = config?.requiredGoodPeriods || currentMilestone?.requiredPeriods || 360
 
@@ -125,7 +125,9 @@ const Dashboard = () => {
 
   // Stat card data — split values for green/white formatting
   const goodHours = stats?.daysAboveTarget || 0
-  const nextTargetPrice = currentMilestone?.priceTarget
+  const nextTargetPrice = nextMilestone?.priceTarget
+    ? (nextMilestone.priceTarget / 1_000_000).toFixed(4)
+    : currentMilestone?.priceTarget
     ? (currentMilestone.priceTarget / 1_000_000).toFixed(4)
     : '—'
   const currentPriceDisplay = stats?.currentPrice
