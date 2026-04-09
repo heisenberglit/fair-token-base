@@ -9,11 +9,11 @@ import { ERC20_ABI } from '../services/contracts'
 
 // Pool definitions — allocation amounts from contract ratios (850M vault / 150M seed liquidity = 1B total)
 const ALLOCATION_POOLS = [
-  { label: 'Treasury',       pct: 50, totalTokens: 500_000_000, tokens: '500M FAIR', color: 'from-blue-500 to-cyan-600',     safeAddress: '0x62c944758F34D598CC817F2bfB7205b467Cf5C3b' },
-  { label: 'Growth',         pct: 20, totalTokens: 200_000_000, tokens: '200M FAIR', color: 'from-emerald-500 to-green-600', safeAddress: '0x8FeAD17f278B4d7b15138a742bb997f1163Ccb20' },
-  { label: 'Seed Liquidity', pct: 15, totalTokens: 150_000_000, tokens: '150M FAIR', color: 'from-indigo-500 to-purple-600', safeAddress: null },
-  { label: 'Team',           pct: 10, totalTokens: 100_000_000, tokens: '100M FAIR', color: 'from-purple-500 to-pink-600',   safeAddress: '0x6E542b2283242D1B896698c8Be0292480bc3e1c3' },
-  { label: 'Reserve',        pct:  5, totalTokens:  50_000_000, tokens:  '50M FAIR', color: 'from-gray-500 to-gray-600',     safeAddress: '0x70Cf1c0469ddB9bE9319c152232FFac3B584D09A' },
+  { label: 'Treasury',       pct: 50, totalTokens: 500_000_000, tokens: '500M', color: 'from-cyan-400 to-sky-500',      safeAddress: '0x62c944758F34D598CC817F2bfB7205b467Cf5C3b' },
+  { label: 'Growth',         pct: 20, totalTokens: 200_000_000, tokens: '200M', color: 'from-green-400 to-emerald-500', safeAddress: '0x8FeAD17f278B4d7b15138a742bb997f1163Ccb20' },
+  { label: 'Team',           pct: 10, totalTokens: 100_000_000, tokens: '100M', color: 'from-yellow-400 to-amber-500',  safeAddress: '0x6E542b2283242D1B896698c8Be0292480bc3e1c3' },
+  { label: 'Reserve',        pct:  5, totalTokens:  50_000_000, tokens:  '50M', color: 'from-slate-400 to-gray-500',    safeAddress: '0x70Cf1c0469ddB9bE9319c152232FFac3B584D09A' },
+   { label: 'Seed Liquidity', pct: 15, totalTokens: 150_000_000, tokens: '150M', color: 'from-violet-500 to-indigo-600', safeAddress: null, fixedPct: 100 },
 ]
 
 const TOTAL_SUPPLY = 1_000_000_000 // 1B FAIR
@@ -93,7 +93,10 @@ const Dashboard = () => {
 
   // Supply info
   const maxSupply = stats?.totalSupply || TOTAL_SUPPLY
-  const circulatingSupply = stats?.totalUnlocked || null
+  const treasurySafeBalance = safeBalances['Treasury'] || 0
+  const circulatingSupply = stats?.totalSupply
+    ? stats.totalSupply - (stats.vaultBalance || 0) - treasurySafeBalance
+    : null
 
   // Vault funding status
   const pendingMilestones = milestones.filter(m => m.unlocked && m.pending)
@@ -370,8 +373,6 @@ const Dashboard = () => {
               <h3 className="text-lg font-semibold text-white">Trustless & Transparent</h3>
               <p className="text-sm text-gray-400 leading-relaxed mt-1">
                 All unlock conditions are enforced on-chain. No human discretion.
-                The community wins before insiders do. Every milestone unlock is
-                automatic and verifiable on Base blockchain.
               </p>
             </div>
           </div>
@@ -385,7 +386,15 @@ const Dashboard = () => {
         </div>
         {stats?.totalLocked > 0 && (
           <p className="text-sm text-gray-400 mb-6">
-            {formatTokenAmount(stats.totalLocked)} FAIR currently locked in vault
+            {formatTokenAmount(stats.totalLocked)} FAIR currently locked in{' '}
+            <a
+              href="https://basescan.org/address/0x59798bC67c3C09DaEF2e8d82d32E9723105308Bb"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-indigo-400 hover:text-indigo-300 underline transition-colors"
+            >
+              vault
+            </a>
           </p>
         )}
         <div className="card">
@@ -393,10 +402,14 @@ const Dashboard = () => {
             {ALLOCATION_POOLS.map((pool, index) => {
               const safeBalance = safeBalances[pool.label]
               const hasSafe = !!pool.safeAddress
-              const balancePct = safeBalance !== undefined
+              const balancePct = pool.fixedPct !== undefined
+                ? pool.fixedPct
+                : safeBalance !== undefined
                 ? Math.min(100, (safeBalance / pool.totalTokens) * 100)
                 : pool.pct
-              const balancePctDisplay = safeBalance !== undefined
+              const balancePctDisplay = pool.fixedPct !== undefined
+                ? pool.fixedPct
+                : safeBalance !== undefined
                 ? balancePct.toFixed(1)
                 : pool.pct
               return (
