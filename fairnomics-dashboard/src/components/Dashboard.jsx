@@ -368,6 +368,11 @@ const Dashboard = () => {
             </div>
             <div>
               <h3 className="text-lg font-semibold text-white">Trustless & Transparent</h3>
+              <p className="text-sm text-gray-400 leading-relaxed mt-1">
+                All unlock conditions are enforced on-chain. No human discretion.
+                The community wins before insiders do. Every milestone unlock is
+                automatic and verifiable on Base blockchain.
+              </p>
             </div>
           </div>
         </motion.div>
