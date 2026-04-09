@@ -1,5 +1,6 @@
 {
   "scripts": {
+    "build": "npx hardhat compile",
     "start": "node scripts/keeper/keeper.js mainnet",
     "keeper": "node scripts/keeper/keeper.js mainnet"
   },
