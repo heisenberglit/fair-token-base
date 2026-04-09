@@ -129,12 +129,12 @@ const Dashboard = () => {
   // Stat card data — split values for green/white formatting
   const goodHours = stats?.daysAboveTarget || 0
   const nextTargetPrice = nextMilestone?.priceTarget
-    ? (nextMilestone.priceTarget / 1_000_000).toFixed(4)
+    ? (nextMilestone.priceTarget / 1_000_000).toFixed(6)
     : currentMilestone?.priceTarget
-    ? (currentMilestone.priceTarget / 1_000_000).toFixed(4)
+    ? (currentMilestone.priceTarget / 1_000_000).toFixed(6)
     : '—'
   const currentPriceDisplay = stats?.currentPrice
-    ? stats.currentPrice.toFixed(4)
+    ? stats.currentPrice.toFixed(6)
     : '—'
 
   const rules = [
@@ -217,9 +217,9 @@ const Dashboard = () => {
           </a>
           <br />
           Circulating:{' '}
-          {`${formatTokenAmount(circulatingSupply)} (${((circulatingSupply / maxSupply) * 100).toFixed(0)}%)`}
+          {`${formatTokenAmount(circulatingSupply).replace(/\.0(B|M|K)/, '$1')} (${((circulatingSupply / maxSupply) * 100).toFixed(0)}%)`}
           {'  ·  '}
-          Max Supply: {formatTokenAmount(maxSupply)}
+          Max Supply: {formatTokenAmount(maxSupply).replace(/\.0(B|M|K)/, '$1')}
         </p>
       </motion.div>
 
