@@ -128,10 +128,10 @@ const Dashboard = () => {
 
   // Stat card data — split values for green/white formatting
   const goodHours = stats?.daysAboveTarget || 0
-  const nextTargetPrice = nextMilestone?.priceTarget
-    ? (nextMilestone.priceTarget / 1_000_000).toFixed(6)
-    : currentMilestone?.priceTarget
+  const nextTargetPrice = currentMilestone?.priceTarget
     ? (currentMilestone.priceTarget / 1_000_000).toFixed(6)
+    : nextMilestone?.priceTarget
+    ? (nextMilestone.priceTarget / 1_000_000).toFixed(6)
     : '—'
   const currentPriceDisplay = stats?.currentPrice
     ? stats.currentPrice.toFixed(6)
@@ -245,7 +245,9 @@ const Dashboard = () => {
           <div className="p-2 rounded-lg bg-indigo-500/10 w-fit mb-4">
             <Target className="text-indigo-400" size={20} />
           </div>
-          <p className="text-gray-500 text-xs font-medium mb-1 uppercase tracking-wider">Next Milestone</p>
+          <p className="text-gray-500 text-xs font-medium mb-1 uppercase tracking-wider">
+            Next Milestone{(currentMilestone || nextMilestone)?.id != null ? ` · M${(currentMilestone || nextMilestone).id}` : ''}
+          </p>
           <p className="text-2xl font-bold text-white">{nextTargetPrice}</p>
         </motion.div>
 
