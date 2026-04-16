@@ -220,6 +220,15 @@ const Dashboard = () => {
           {`${formatTokenAmount(circulatingSupply).replace(/\.0(B|M|K)/, '$1')} (${((circulatingSupply / maxSupply) * 100).toFixed(0)}%)`}
           {'  ·  '}
           Max Supply: {formatTokenAmount(maxSupply).replace(/\.0(B|M|K)/, '$1')}
+          {'  ·  '}
+          <a
+            href="https://www.geckoterminal.com/base/pools/0xae48487c81c75511bb7d59d5a510568ac8b526f8"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-white underline underline-offset-2 hover:opacity-75"
+          >
+            CoinGecko
+          </a>
         </p>
       </motion.div>
 
