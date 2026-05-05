@@ -34,7 +34,7 @@ function useSafeBalances(pools, fairTokenAddress, rpcUrl) {
         )
         if (cancelled) return
         const map = {}
-        addressedPools.forEach((p, i) => { map[p.label] = Number(results[i]) })
+        addressedPools.forEach((p, i) => { map[p.label] = Number(results[i]) / 1e18 })
         setBalances(map)
       } catch (e) {
         console.warn('Could not fetch Safe balances:', e.message)

@@ -8,8 +8,23 @@ const formatUnlockDate = (timestamp) => {
   return new Date(timestamp).toISOString().slice(0, 10) // YYYY-MM-DD
 }
 
+const M1_TWAP_PRICE = 0.0009  // actual TWAP avg price at M1 unlock
+
 const MilestoneTimeline = () => {
   const { milestones = [], currentMilestone, loading, refreshing, error, lastUpdated } = useFairnomics()
+
+  // M2's price target = 1.5× M1 TWAP (may also be read from contract data)
+  const m2Milestone = milestones.find(m => m.id === 2)
+  const m2PriceTarget = m2Milestone
+    ? m2Milestone.priceTarget / 1_000_000
+    : M1_TWAP_PRICE * 1.5
+
+  const getMilestoneDisplayPrice = (milestone, status) => {
+    if (milestone.id === 1) return M1_TWAP_PRICE
+    if (status === 'unlocked' || status === 'pending') return milestone.unlockPrice / 1_000_000
+    // Locked / current: cascade estimates from M2's price target
+    return m2PriceTarget * Math.pow(1.5, milestone.id - 2)
+  }
 
   // Only show loading on initial load
   if (loading && milestones.length === 0) {
@@ -121,6 +136,7 @@ const MilestoneTimeline = () => {
               ? 100
               : 0
             const unlockDate = formatUnlockDate(milestone.unlockTimestamp)
+            const displayPrice = getMilestoneDisplayPrice(milestone, status)
 
             return (
               <motion.div
@@ -272,11 +288,9 @@ const MilestoneTimeline = () => {
                             {status === 'unlocked' || status === 'pending' ? 'Unlocked at' : 'Unlocks at or above'}
                           </p>
                           <p className="text-sm font-bold text-white">
-                            {status === 'unlocked' && milestone.unlockPrice !== null
-                              ? `${(milestone.unlockPrice / 1_000_000).toFixed(6)}`
-                              : status === 'locked'
-                              ? <span>{(milestone.priceTarget / 1_000_000).toFixed(6)}<span className="text-gray-500 text-xs ml-0.5">*</span></span>
-                              : `${(milestone.priceTarget / 1_000_000).toFixed(6)}`
+                            {status === 'locked'
+                              ? <span>{displayPrice.toFixed(6)}<span className="text-gray-500 text-xs ml-0.5">*</span></span>
+                              : displayPrice.toFixed(6)
                             }
                           </p>
                         </div>
@@ -338,7 +352,7 @@ const MilestoneTimeline = () => {
 
       {/* Footnote */}
       <p className="text-xs text-gray-600 mt-4">
-        * Estimated price target. Locked milestone targets are recalculated at each unlock — the actual target will be set to 1.5× the TWAP price at the time the previous milestone unlocks.
+        * Estimated price target, cascaded at 1.5× per milestone from M2's target (${m2PriceTarget.toFixed(6)}), which was set to 1.5× M1's TWAP unlock price of ${M1_TWAP_PRICE}. Actual targets are recalculated on-chain at each unlock.
       </p>
     </div>
   )
